@@ -2,8 +2,8 @@
 /**
  * Plugin Name: WooCommerce Polylang Integration
  * Plugin URI: https://example.com/woocommerce-polylang-integration
- * Description: Vollständige WooCommerce-Mehrsprachigkeit mit Polylang-Integration. Macht alle WooCommerce-Inhalte übersetzbar und bietet SEO-optimierte Sprachversionen.
- * Version: 1.0.1
+ * Description: Vollständige WooCommerce-Mehrsprachigkeit mit Polylang-Integration und Elementor Pro Support. Macht alle WooCommerce-Inhalte übersetzbar und bietet SEO-optimierte Sprachversionen.
+ * Version: 1.1.0
  * Author: Your Name
  * Author URI: https://example.com
  * Text Domain: wc-polylang-integration
@@ -28,7 +28,7 @@ if (!defined('WP_DEBUG_LOG')) {
 }
 
 // Define plugin constants
-define('WC_POLYLANG_INTEGRATION_VERSION', '1.0.1');
+define('WC_POLYLANG_INTEGRATION_VERSION', '1.1.0');
 define('WC_POLYLANG_INTEGRATION_PLUGIN_FILE', __FILE__);
 define('WC_POLYLANG_INTEGRATION_PLUGIN_DIR', plugin_dir_path(__FILE__));
 define('WC_POLYLANG_INTEGRATION_PLUGIN_URL', plugin_dir_url(__FILE__));
@@ -191,7 +191,8 @@ class WC_Polylang_Integration {
             'includes/class-wc-polylang-emails.php',
             'includes/class-wc-polylang-seo.php',
             'includes/class-wc-polylang-custom-fields.php',
-            'includes/class-wc-polylang-hooks.php'
+            'includes/class-wc-polylang-hooks.php',
+            'includes/class-wc-polylang-elementor.php'
         );
         
         foreach ($files as $file) {
@@ -232,7 +233,8 @@ class WC_Polylang_Integration {
                 'emails' => 'WC_Polylang_Emails',
                 'seo' => 'WC_Polylang_SEO',
                 'custom_fields' => 'WC_Polylang_Custom_Fields',
-                'hooks' => 'WC_Polylang_Hooks'
+                'hooks' => 'WC_Polylang_Hooks',
+                'elementor' => 'WC_Polylang_Elementor'
             );
             
             foreach ($frontend_components as $key => $class_name) {
@@ -263,6 +265,9 @@ class WC_Polylang_Integration {
             // HPOS compatibility
             add_action('before_woocommerce_init', array($this, 'declare_hpos_compatibility'));
             
+            // Elementor Pro compatibility
+            add_action('elementor/init', array($this, 'declare_elementor_compatibility'));
+            
             wc_polylang_debug_log('Hooks added successfully');
             
         } catch (Exception $e) {
@@ -286,6 +291,15 @@ class WC_Polylang_Integration {
     public function declare_hpos_compatibility() {
         if (class_exists('\Automattic\WooCommerce\Utilities\FeaturesUtil')) {
             \Automattic\WooCommerce\Utilities\FeaturesUtil::declare_compatibility('custom_order_tables', __FILE__, true);
+        }
+    }
+    
+    /**
+     * Declare Elementor Pro compatibility
+     */
+    public function declare_elementor_compatibility() {
+        if (defined('ELEMENTOR_PRO_VERSION')) {
+            wc_polylang_debug_log('Elementor Pro detected, initializing compatibility');
         }
     }
     
