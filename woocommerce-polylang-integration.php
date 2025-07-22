@@ -185,6 +185,7 @@ class WC_Polylang_Integration {
         $files = array(
             'includes/functions.php',
             'includes/class-wc-polylang-admin.php',
+            'includes/class-wc-polylang-shop-config.php',
             'includes/class-wc-polylang-products.php',
             'includes/class-wc-polylang-widgets.php',
             'includes/class-wc-polylang-emails.php',

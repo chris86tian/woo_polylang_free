@@ -28,6 +28,9 @@ class WC_Polylang_Admin {
             add_action('admin_init', array($this, 'init_settings'));
             add_action('admin_enqueue_scripts', array($this, 'enqueue_admin_scripts'));
             
+            // Initialize shop configuration
+            WC_Polylang_Shop_Config::get_instance();
+            
             wc_polylang_debug_log('Admin class initialized');
         } catch (Exception $e) {
             wc_polylang_debug_log('Error in admin constructor: ' . $e->getMessage());
@@ -106,6 +109,15 @@ class WC_Polylang_Admin {
                 <p><?php _e('Dieses Plugin integriert WooCommerce vollständig mit Polylang für eine umfassende Mehrsprachigkeit.', 'wc-polylang-integration'); ?></p>
             </div>
             
+            <!-- Quick Setup Card -->
+            <div class="wc-polylang-quick-setup">
+                <h2><?php _e('🚀 Schnelleinrichtung', 'wc-polylang-integration'); ?></h2>
+                <p><?php _e('Richten Sie Ihre mehrsprachigen Shop-Seiten mit einem Klick ein:', 'wc-polylang-integration'); ?></p>
+                <a href="<?php echo admin_url('admin.php?page=wc-polylang-shop-config'); ?>" class="button button-primary button-large">
+                    <?php _e('🛍️ Shop-Seiten konfigurieren', 'wc-polylang-integration'); ?>
+                </a>
+            </div>
+            
             <div class="wc-polylang-stats">
                 <h2><?php _e('Übersetzungsstatistiken', 'wc-polylang-integration'); ?></h2>
                 <div class="stats-grid">
@@ -159,6 +171,30 @@ class WC_Polylang_Admin {
         </div>
         
         <style>
+        .wc-polylang-quick-setup {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 30px;
+            border-radius: 8px;
+            margin: 20px 0;
+            text-align: center;
+        }
+        .wc-polylang-quick-setup h2 {
+            color: white;
+            margin-top: 0;
+        }
+        .wc-polylang-quick-setup .button {
+            background: white;
+            color: #667eea;
+            border: none;
+            font-weight: bold;
+            margin-top: 15px;
+        }
+        .wc-polylang-quick-setup .button:hover {
+            background: #f8f9fa;
+            transform: translateY(-2px);
+            box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+        }
         .wc-polylang-stats {
             background: #fff;
             border: 1px solid #ccd0d4;
