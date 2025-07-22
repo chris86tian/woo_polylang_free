@@ -1,0 +1,327 @@
+/* WooCommerce Polylang Integration Admin Styles */
+
+.wc-polylang-admin-container {
+    max-width: 1200px;
+    margin: 20px 0;
+}
+
+.wc-polylang-dashboard {
+    background: #fff;
+    border: 1px solid #ccd0d4;
+    border-radius: 4px;
+    padding: 20px;
+    margin-bottom: 20px;
+    box-shadow: 0 1px 1px rgba(0,0,0,.04);
+}
+
+.wc-polylang-dashboard h2 {
+    margin-top: 0;
+    margin-bottom: 15px;
+    font-size: 18px;
+    color: #23282d;
+}
+
+.wc-polylang-stats {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+    gap: 20px;
+    margin-top: 20px;
+}
+
+.stat-box {
+    background: #f8f9fa;
+    border: 1px solid #e1e5e9;
+    border-radius: 6px;
+    padding: 20px;
+    text-align: center;
+    transition: all 0.3s ease;
+}
+
+.stat-box:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+}
+
+.stat-box h3 {
+    font-size: 32px;
+    font-weight: 600;
+    margin: 0 0 8px 0;
+    color: #2271b1;
+}
+
+.stat-box p {
+    margin: 0;
+    font-size: 14px;
+    color: #646970;
+    font-weight: 500;
+}
+
+.wc-polylang-settings-form {
+    background: #fff;
+    border: 1px solid #ccd0d4;
+    border-radius: 4px;
+    padding: 20px;
+    margin-bottom: 20px;
+    box-shadow: 0 1px 1px rgba(0,0,0,.04);
+}
+
+.wc-polylang-settings-form .form-table th {
+    width: 200px;
+    font-weight: 600;
+}
+
+.wc-polylang-settings-form fieldset label {
+    display: block;
+    margin-bottom: 8px;
+    font-weight: 500;
+}
+
+.wc-polylang-settings-form fieldset input[type="checkbox"] {
+    margin-right: 8px;
+}
+
+.wc-polylang-tools {
+    background: #fff;
+    border: 1px solid #ccd0d4;
+    border-radius: 4px;
+    padding: 20px;
+    margin-bottom: 20px;
+    box-shadow: 0 1px 1px rgba(0,0,0,.04);
+}
+
+.wc-polylang-tools h2 {
+    margin-top: 0;
+    margin-bottom: 10px;
+    font-size: 18px;
+    color: #23282d;
+}
+
+.wc-polylang-tools p {
+    margin-bottom: 15px;
+    color: #646970;
+}
+
+#sync-progress {
+    margin-top: 15px;
+    padding: 15px;
+    background: #f8f9fa;
+    border-radius: 4px;
+    border: 1px solid #e1e5e9;
+}
+
+.progress-bar {
+    width: 100%;
+    height: 20px;
+    background: #e1e5e9;
+    border-radius: 10px;
+    overflow: hidden;
+    margin-bottom: 10px;
+}
+
+.progress-fill {
+    height: 100%;
+    background: linear-gradient(90deg, #2271b1, #72aee6);
+    width: 0%;
+    transition: width 0.3s ease;
+    border-radius: 10px;
+}
+
+.progress-text {
+    margin: 0;
+    font-size: 14px;
+    color: #646970;
+    text-align: center;
+}
+
+.wc-polylang-language-status {
+    background: #fff;
+    border: 1px solid #ccd0d4;
+    border-radius: 4px;
+    padding: 20px;
+    box-shadow: 0 1px 1px rgba(0,0,0,.04);
+}
+
+.wc-polylang-language-status h2 {
+    margin-top: 0;
+    margin-bottom: 15px;
+    font-size: 18px;
+    color: #23282d;
+}
+
+.wc-polylang-language-status table {
+    margin-top: 15px;
+}
+
+.wc-polylang-language-status th,
+.wc-polylang-language-status td {
+    padding: 12px 10px;
+    text-align: left;
+}
+
+.wc-polylang-language-status th {
+    font-weight: 600;
+    background: #f8f9fa;
+}
+
+.status-complete {
+    color: #00a32a;
+    font-weight: 600;
+}
+
+.status-partial {
+    color: #dba617;
+    font-weight: 600;
+}
+
+.status-incomplete {
+    color: #d63638;
+    font-weight: 600;
+}
+
+/* Product translation links */
+.wc-polylang-product-translations {
+    margin: 15px 0;
+    padding: 15px;
+    background: #f8f9fa;
+    border: 1px solid #e1e5e9;
+    border-radius: 4px;
+}
+
+.translations-label {
+    font-weight: 600;
+    margin-right: 10px;
+    color: #23282d;
+}
+
+.translation-link {
+    display: inline-block;
+    margin-right: 10px;
+    padding: 4px 8px;
+    background: #2271b1;
+    color: #fff !important;
+    text-decoration: none;
+    border-radius: 3px;
+    font-size: 12px;
+    font-weight: 500;
+    transition: background-color 0.3s ease;
+}
+
+.translation-link:hover {
+    background: #135e96;
+    color: #fff !important;
+}
+
+/* Responsive design */
+@media (max-width: 768px) {
+    .wc-polylang-stats {
+        grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+        gap: 15px;
+    }
+    
+    .stat-box {
+        padding: 15px;
+    }
+    
+    .stat-box h3 {
+        font-size: 24px;
+    }
+    
+    .wc-polylang-settings-form .form-table th {
+        width: auto;
+        display: block;
+        padding-bottom: 5px;
+    }
+    
+    .wc-polylang-settings-form .form-table td {
+        display: block;
+        padding-top: 0;
+    }
+}
+
+/* Loading states */
+.wc-polylang-loading {
+    opacity: 0.6;
+    pointer-events: none;
+}
+
+.wc-polylang-loading::after {
+    content: '';
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    width: 20px;
+    height: 20px;
+    margin: -10px 0 0 -10px;
+    border: 2px solid #f3f3f3;
+    border-top: 2px solid #2271b1;
+    border-radius: 50%;
+    animation: wc-polylang-spin 1s linear infinite;
+}
+
+@keyframes wc-polylang-spin {
+    0% { transform: rotate(0deg); }
+    100% { transform: rotate(360deg); }
+}
+
+/* Success/Error messages */
+.wc-polylang-message {
+    padding: 12px 15px;
+    margin: 15px 0;
+    border-radius: 4px;
+    font-weight: 500;
+}
+
+.wc-polylang-message.success {
+    background: #d1e7dd;
+    border: 1px solid #badbcc;
+    color: #0f5132;
+}
+
+.wc-polylang-message.error {
+    background: #f8d7da;
+    border: 1px solid #f5c2c7;
+    color: #842029;
+}
+
+.wc-polylang-message.info {
+    background: #d1ecf1;
+    border: 1px solid #bee5eb;
+    color: #055160;
+}
+
+/* Button styles */
+.wc-polylang-button {
+    background: #2271b1;
+    border: 1px solid #2271b1;
+    color: #fff;
+    padding: 8px 16px;
+    border-radius: 4px;
+    cursor: pointer;
+    font-weight: 500;
+    text-decoration: none;
+    display: inline-block;
+    transition: all 0.3s ease;
+}
+
+.wc-polylang-button:hover {
+    background: #135e96;
+    border-color: #135e96;
+    color: #fff;
+}
+
+.wc-polylang-button:disabled {
+    background: #f6f7f7;
+    border-color: #dcdcde;
+    color: #a7aaad;
+    cursor: not-allowed;
+}
+
+.wc-polylang-button.secondary {
+    background: #fff;
+    border-color: #2271b1;
+    color: #2271b1;
+}
+
+.wc-polylang-button.secondary:hover {
+    background: #f6f7f7;
+}
