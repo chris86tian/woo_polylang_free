@@ -23,99 +23,35 @@ class WC_Polylang_Products {
             return;
         }
         
-        add_action('init', array($this, 'init'));
-        add_action('woocommerce_product_duplicate', array($this, 'handle_product_duplication'), 10, 2);
-        add_filter('woocommerce_product_get_name', array($this, 'translate_product_name'), 10, 2);
-        add_filter('woocommerce_product_get_description', array($this, 'translate_product_description'), 10, 2);
-        add_filter('woocommerce_product_get_short_description', array($this, 'translate_product_short_description'), 10, 2);
-        add_action('woocommerce_product_meta_start', array($this, 'add_translation_links'));
-    }
-    
-    /**
-     * Initialize product translation
-     */
-    public function init() {
-        // Register product post type with Polylang
-        if (function_exists('pll_register_string')) {
-            add_action('pll_init', array($this, 'register_product_strings'));
-        }
-        
-        // Add product translation support
-        add_filter('pll_get_post_types', array($this, 'add_product_post_type'));
-        add_filter('pll_get_taxonomies', array($this, 'add_product_taxonomies'));
-        
-        // Handle product attributes
-        add_action('woocommerce_save_product_variation', array($this, 'save_variation_translations'));
-        add_filter('woocommerce_attribute_label', array($this, 'translate_attribute_label'), 10, 3);
-        
-        // Handle product categories and tags
-        add_filter('get_terms', array($this, 'translate_product_terms'), 10, 4);
-    }
-    
-    /**
-     * Register product strings with Polylang
-     */
-    public function register_product_strings() {
-        // Register common WooCommerce strings
-        $strings = array(
-            'Add to cart' => __('Add to cart', 'woocommerce'),
-            'Read more' => __('Read more', 'woocommerce'),
-            'Select options' => __('Select options', 'woocommerce'),
-            'Out of stock' => __('Out of stock', 'woocommerce'),
-            'In stock' => __('In stock', 'woocommerce'),
-            'Sale!' => __('Sale!', 'woocommerce'),
-            'Free!' => __('Free!', 'woocommerce'),
-            'Price' => __('Price', 'woocommerce'),
-            'Quantity' => __('Quantity', 'woocommerce'),
-            'Total' => __('Total', 'woocommerce'),
-            'Subtotal' => __('Subtotal', 'woocommerce'),
-            'Shipping' => __('Shipping', 'woocommerce'),
-            'Tax' => __('Tax', 'woocommerce'),
-        );
-        
-        foreach ($strings as $name => $string) {
-            pll_register_string($name, $string, 'WooCommerce');
-        }
-        
-        // Register product-specific strings
-        $products = get_posts(array(
-            'post_type' => 'product',
-            'post_status' => 'publish',
-            'numberposts' => -1
-        ));
-        
-        foreach ($products as $product) {
-            // Register product title
-            pll_register_string(
-                'Product Title: ' . $product->ID,
-                $product->post_title,
-                'WooCommerce Products'
-            );
-            
-            // Register product description
-            if (!empty($product->post_content)) {
-                pll_register_string(
-                    'Product Description: ' . $product->ID,
-                    $product->post_content,
-                    'WooCommerce Products'
-                );
-            }
-            
-            // Register product short description
-            if (!empty($product->post_excerpt)) {
-                pll_register_string(
-                    'Product Short Description: ' . $product->ID,
-                    $product->post_excerpt,
-                    'WooCommerce Products'
-                );
-            }
+        try {
+            $this->init_hooks();
+            wc_polylang_debug_log('Products class initialized');
+        } catch (Exception $e) {
+            wc_polylang_debug_log('Error in products constructor: ' . $e->getMessage());
         }
     }
     
     /**
-     * Add product post type to Polylang
+     * Initialize hooks
      */
-    public function add_product_post_type($post_types) {
+    private function init_hooks() {
+        // Add product post type to Polylang
+        add_filter('pll_get_post_types', array($this, 'add_post_types'));
+        
+        // Add product taxonomies to Polylang
+        add_filter('pll_get_taxonomies', array($this, 'add_taxonomies'));
+        
+        // Handle product queries
+        add_action('pre_get_posts', array($this, 'filter_product_queries'));
+        
+        // Handle product variations
+        add_filter('woocommerce_product_variation_get_name', array($this, 'translate_variation_name'), 10, 2);
+    }
+    
+    /**
+     * Add product post types to Polylang
+     */
+    public function add_post_types($post_types) {
         $post_types['product'] = 'product';
         $post_types['product_variation'] = 'product_variation';
         return $post_types;
@@ -124,13 +60,11 @@ class WC_Polylang_Products {
     /**
      * Add product taxonomies to Polylang
      */
-    public function add_product_taxonomies($taxonomies) {
+    public function add_taxonomies($taxonomies) {
         $taxonomies['product_cat'] = 'product_cat';
         $taxonomies['product_tag'] = 'product_tag';
-        $taxonomies['pa_color'] = 'pa_color';
-        $taxonomies['pa_size'] = 'pa_size';
         
-        // Add all product attributes
+        // Add product attributes
         $attribute_taxonomies = wc_get_attribute_taxonomies();
         foreach ($attribute_taxonomies as $attribute) {
             $taxonomies['pa_' . $attribute->attribute_name] = 'pa_' . $attribute->attribute_name;
@@ -140,83 +74,52 @@ class WC_Polylang_Products {
     }
     
     /**
-     * Handle product duplication for translations
+     * Filter product queries by language
      */
-    public function handle_product_duplication($duplicate, $product) {
-        if (function_exists('pll_get_post_language')) {
-            $original_lang = pll_get_post_language($product->get_id());
-            if ($original_lang) {
-                pll_set_post_language($duplicate->get_id(), $original_lang);
+    public function filter_product_queries($query) {
+        if (is_admin() || !$query->is_main_query()) {
+            return;
+        }
+        
+        if (!function_exists('pll_current_language')) {
+            return;
+        }
+        
+        // Only filter product queries
+        if ($query->get('post_type') === 'product' || is_shop() || is_product_category() || is_product_tag()) {
+            $current_language = pll_current_language();
+            if ($current_language) {
+                $query->set('lang', $current_language);
             }
         }
     }
     
     /**
-     * Translate product name
+     * Translate product variation names
      */
-    public function translate_product_name($name, $product) {
-        if (function_exists('pll__')) {
-            $translated = pll__('Product Title: ' . $product->get_id());
-            return $translated ? $translated : $name;
-        }
-        return $name;
-    }
-    
-    /**
-     * Translate product description
-     */
-    public function translate_product_description($description, $product) {
-        if (function_exists('pll__')) {
-            $translated = pll__('Product Description: ' . $product->get_id());
-            return $translated ? $translated : $description;
-        }
-        return $description;
-    }
-    
-    /**
-     * Translate product short description
-     */
-    public function translate_product_short_description($short_description, $product) {
-        if (function_exists('pll__')) {
-            $translated = pll__('Product Short Description: ' . $product->get_id());
-            return $translated ? $translated : $short_description;
-        }
-        return $short_description;
-    }
-    
-    /**
-     * Translate attribute labels
-     */
-    public function translate_attribute_label($label, $name, $product) {
-        if (function_exists('pll__')) {
-            $translated = pll__('Attribute: ' . $name);
-            return $translated ? $translated : $label;
-        }
-        return $label;
-    }
-    
-    /**
-     * Translate product terms (categories, tags, attributes)
-     */
-    public function translate_product_terms($terms, $taxonomies, $args, $term_query) {
-        if (!function_exists('pll_get_term_translations') || !is_array($terms)) {
-            return $terms;
+    public function translate_variation_name($name, $product) {
+        if (!function_exists('pll_get_post_language')) {
+            return $name;
         }
         
-        $product_taxonomies = array('product_cat', 'product_tag');
-        $attribute_taxonomies = wc_get_attribute_taxonomy_names();
-        $all_taxonomies = array_merge($product_taxonomies, $attribute_taxonomies);
+        $language = pll_get_post_language($product->get_parent_id());
+        if (!$language) {
+            return $name;
+        }
         
-        if (array_intersect($taxonomies, $all_taxonomies)) {
-            $current_lang = pll_current_language();
-            if ($current_lang) {
-                foreach ($terms as $key => $term) {
-                    if (is_object($term) && isset($term->term_id)) {
-                        $translated_term_id = pll_get_term($term->term_id, $current_lang);
-                        if ($translated_term_id && $translated_term_id !== $term->term_id) {
-                            $translated_term = get_term($translated_term_id, $term->taxonomy);
-                            if ($translated_term && !is_wp_error($translated_term)) {
-                                $terms[$key] = $translated_term;
+        // Get parent product in current language
+        if (function_exists('pll_get_post')) {
+            $translated_parent_id = pll_get_post($product->get_parent_id(), pll_current_language());
+            if ($translated_parent_id && $translated_parent_id !== $product->get_parent_id()) {
+                $translated_parent = wc_get_product($translated_parent_id);
+                if ($translated_parent) {
+                    // Find corresponding variation
+                    $variations = $translated_parent->get_available_variations();
+                    foreach ($variations as $variation) {
+                        if ($this->variations_match($product, $variation)) {
+                            $translated_variation = wc_get_product($variation['variation_id']);
+                            if ($translated_variation) {
+                                return $translated_variation->get_name();
                             }
                         }
                     }
@@ -224,53 +127,17 @@ class WC_Polylang_Products {
             }
         }
         
-        return $terms;
+        return $name;
     }
     
     /**
-     * Save variation translations
+     * Check if variations match (same attributes)
      */
-    public function save_variation_translations($variation_id) {
-        if (function_exists('pll_get_post_language')) {
-            $parent_id = wp_get_post_parent_id($variation_id);
-            if ($parent_id) {
-                $parent_lang = pll_get_post_language($parent_id);
-                if ($parent_lang) {
-                    pll_set_post_language($variation_id, $parent_lang);
-                }
-            }
-        }
-    }
-    
-    /**
-     * Add translation links to product meta
-     */
-    public function add_translation_links() {
-        if (!function_exists('pll_the_languages') || !is_product()) {
-            return;
-        }
+    private function variations_match($original_variation, $translated_variation_data) {
+        $original_attributes = $original_variation->get_attributes();
+        $translated_attributes = $translated_variation_data['attributes'];
         
-        global $product;
-        if (!$product) {
-            return;
-        }
-        
-        $translations = pll_get_post_translations($product->get_id());
-        if (count($translations) > 1) {
-            echo '<div class="wc-polylang-product-translations">';
-            echo '<span class="translations-label">' . __('Available in:', 'wc-polylang-integration') . '</span>';
-            
-            foreach ($translations as $lang => $translation_id) {
-                if ($translation_id !== $product->get_id()) {
-                    $translation_url = get_permalink($translation_id);
-                    $lang_name = pll_get_language_name($lang);
-                    echo '<a href="' . esc_url($translation_url) . '" class="translation-link" hreflang="' . esc_attr($lang) . '">';
-                    echo esc_html($lang_name);
-                    echo '</a>';
-                }
-            }
-            
-            echo '</div>';
-        }
+        // Simple comparison - could be enhanced
+        return count($original_attributes) === count($translated_attributes);
     }
 }

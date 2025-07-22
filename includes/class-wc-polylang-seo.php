@@ -1,6 +1,6 @@
 <?php
 /**
- * SEO functionality for multilingual WooCommerce
+ * SEO optimization functionality
  */
 
 if (!defined('ABSPATH')) {
@@ -19,126 +19,61 @@ class WC_Polylang_SEO {
     }
     
     private function __construct() {
-        add_action('init', array($this, 'init'));
-        add_action('wp_head', array($this, 'add_hreflang_tags'), 1);
-        add_action('wp_head', array($this, 'add_canonical_urls'), 2);
-        add_filter('wpseo_canonical', array($this, 'filter_canonical_url'));
-        add_filter('rank_math/frontend/canonical', array($this, 'filter_canonical_url'));
-        add_action('wp_head', array($this, 'add_language_meta_tags'), 3);
-    }
-    
-    /**
-     * Initialize SEO functionality
-     */
-    public function init() {
-        // Add language-specific URL structure
-        add_filter('rewrite_rules_array', array($this, 'add_language_rewrite_rules'));
-        
-        // Handle language switching for WooCommerce pages
-        add_filter('pll_translation_url', array($this, 'fix_woocommerce_translation_urls'), 10, 2);
-        
-        // Add language information to structured data
-        add_filter('woocommerce_structured_data_product', array($this, 'add_language_to_structured_data'), 10, 2);
-        
-        // Handle sitemap generation
-        add_filter('wpseo_sitemap_url', array($this, 'add_language_to_sitemap_urls'), 10, 2);
-    }
-    
-    /**
-     * Add hreflang tags for multilingual SEO
-     */
-    public function add_hreflang_tags() {
-        if (get_option('wc_polylang_seo_hreflang_tags') !== 'yes') {
+        if (get_option('wc_polylang_enable_seo_translation') !== 'yes') {
             return;
         }
         
-        if (!function_exists('pll_languages_list') || !function_exists('pll_get_post_translations')) {
+        try {
+            $this->init_hooks();
+            wc_polylang_debug_log('SEO class initialized');
+        } catch (Exception $e) {
+            wc_polylang_debug_log('Error in SEO constructor: ' . $e->getMessage());
+        }
+    }
+    
+    /**
+     * Initialize hooks
+     */
+    private function init_hooks() {
+        // Add hreflang tags
+        if (get_option('wc_polylang_seo_hreflang_tags') === 'yes') {
+            add_action('wp_head', array($this, 'add_hreflang_tags'));
+        }
+        
+        // Add canonical URLs
+        if (get_option('wc_polylang_seo_canonical_urls') === 'yes') {
+            add_action('wp_head', array($this, 'add_canonical_url'));
+        }
+        
+        // Modify page titles
+        add_filter('wp_title', array($this, 'modify_page_title'), 10, 2);
+        add_filter('document_title_parts', array($this, 'modify_document_title_parts'));
+    }
+    
+    /**
+     * Add hreflang tags for WooCommerce pages
+     */
+    public function add_hreflang_tags() {
+        if (!function_exists('pll_languages_list') || !wc_polylang_is_woocommerce_page()) {
             return;
         }
         
         global $post;
-        
-        // Only add hreflang for WooCommerce pages
-        if (!is_woocommerce() && !is_cart() && !is_checkout() && !is_account_page()) {
-            return;
-        }
-        
         $languages = pll_languages_list();
-        $current_post_id = get_queried_object_id();
         
-        if (is_singular('product') && $post) {
-            // Product pages
-            $translations = pll_get_post_translations($post->ID);
-            
-            foreach ($languages as $lang) {
-                $lang_info = pll_get_language($lang);
-                if (!$lang_info) continue;
-                
-                if (isset($translations[$lang])) {
-                    $url = get_permalink($translations[$lang]);
-                } else {
-                    // Fallback to homepage for this language
-                    $url = pll_home_url($lang);
-                }
-                
-                echo '<link rel="alternate" hreflang="' . esc_attr($lang_info['locale']) . '" href="' . esc_url($url) . '" />' . "\n";
-            }
-            
-            // Add x-default
-            $default_lang = pll_default_language();
-            if (isset($translations[$default_lang])) {
-                $default_url = get_permalink($translations[$default_lang]);
-                echo '<link rel="alternate" hreflang="x-default" href="' . esc_url($default_url) . '" />' . "\n";
-            }
-        } elseif (is_product_category() || is_product_tag()) {
-            // Category/Tag pages
-            $term = get_queried_object();
-            if ($term && function_exists('pll_get_term_translations')) {
-                $translations = pll_get_term_translations($term->term_id);
-                
-                foreach ($languages as $lang) {
-                    $lang_info = pll_get_language($lang);
-                    if (!$lang_info) continue;
-                    
-                    if (isset($translations[$lang])) {
-                        $url = get_term_link($translations[$lang], $term->taxonomy);
-                    } else {
-                        $url = pll_home_url($lang);
-                    }
-                    
-                    if (!is_wp_error($url)) {
-                        echo '<link rel="alternate" hreflang="' . esc_attr($lang_info['locale']) . '" href="' . esc_url($url) . '" />' . "\n";
-                    }
-                }
-            }
-        } elseif (is_shop() || is_cart() || is_checkout() || is_account_page()) {
-            // WooCommerce special pages
-            foreach ($languages as $lang) {
-                $lang_info = pll_get_language($lang);
-                if (!$lang_info) continue;
-                
-                $url = $this->get_woocommerce_page_url_for_language($lang);
-                if ($url) {
-                    echo '<link rel="alternate" hreflang="' . esc_attr($lang_info['locale']) . '" href="' . esc_url($url) . '" />' . "\n";
-                }
+        foreach ($languages as $language) {
+            $url = $this->get_translated_url($language);
+            if ($url) {
+                echo '<link rel="alternate" hreflang="' . esc_attr($language) . '" href="' . esc_url($url) . '" />' . "\n";
             }
         }
     }
     
     /**
-     * Add canonical URLs
+     * Add canonical URL
      */
-    public function add_canonical_urls() {
-        if (get_option('wc_polylang_seo_canonical_urls') !== 'yes') {
-            return;
-        }
-        
-        // Let SEO plugins handle canonical URLs if they're active
-        if (defined('WPSEO_VERSION') || class_exists('RankMath')) {
-            return;
-        }
-        
-        if (!is_woocommerce() && !is_cart() && !is_checkout() && !is_account_page()) {
+    public function add_canonical_url() {
+        if (!wc_polylang_is_woocommerce_page()) {
             return;
         }
         
@@ -149,29 +84,42 @@ class WC_Polylang_SEO {
     }
     
     /**
-     * Filter canonical URL for SEO plugins
+     * Get translated URL for a specific language
      */
-    public function filter_canonical_url($canonical_url) {
-        if (!is_woocommerce() && !is_cart() && !is_checkout() && !is_account_page()) {
-            return $canonical_url;
+    private function get_translated_url($language) {
+        global $post;
+        
+        if (is_shop()) {
+            return wc_polylang_get_page_url('shop', $language);
+        } elseif (is_cart()) {
+            return wc_polylang_get_page_url('cart', $language);
+        } elseif (is_checkout()) {
+            return wc_polylang_get_page_url('checkout', $language);
+        } elseif (is_account_page()) {
+            return wc_polylang_get_page_url('myaccount', $language);
+        } elseif (is_singular('product') && $post) {
+            if (function_exists('pll_get_post')) {
+                $translated_id = pll_get_post($post->ID, $language);
+                return $translated_id ? get_permalink($translated_id) : null;
+            }
+        } elseif (is_product_category()) {
+            $term = get_queried_object();
+            if ($term && function_exists('pll_get_term')) {
+                $translated_term_id = pll_get_term($term->term_id, $language);
+                return $translated_term_id ? get_term_link($translated_term_id, 'product_cat') : null;
+            }
         }
         
-        $custom_canonical = $this->get_canonical_url();
-        return $custom_canonical ?: $canonical_url;
+        return null;
     }
     
     /**
      * Get canonical URL for current page
      */
     private function get_canonical_url() {
-        global $wp;
+        global $post;
         
-        if (is_singular('product')) {
-            return get_permalink();
-        } elseif (is_product_category() || is_product_tag()) {
-            $term = get_queried_object();
-            return get_term_link($term);
-        } elseif (is_shop()) {
+        if (is_shop()) {
             return get_permalink(wc_get_page_id('shop'));
         } elseif (is_cart()) {
             return get_permalink(wc_get_page_id('cart'));
@@ -179,131 +127,50 @@ class WC_Polylang_SEO {
             return get_permalink(wc_get_page_id('checkout'));
         } elseif (is_account_page()) {
             return get_permalink(wc_get_page_id('myaccount'));
+        } elseif (is_singular('product') && $post) {
+            return get_permalink($post->ID);
+        } elseif (is_product_category()) {
+            $term = get_queried_object();
+            return $term ? get_term_link($term, 'product_cat') : null;
         }
         
-        return home_url($wp->request);
+        return null;
     }
     
     /**
-     * Add language meta tags
+     * Modify page title
      */
-    public function add_language_meta_tags() {
-        if (!function_exists('pll_current_language')) {
-            return;
+    public function modify_page_title($title, $sep) {
+        if (!wc_polylang_is_woocommerce_page() || !function_exists('pll__')) {
+            return $title;
         }
         
-        $current_lang = pll_current_language();
-        if ($current_lang) {
-            $lang_info = pll_get_language($current_lang);
-            if ($lang_info) {
-                echo '<meta property="og:locale" content="' . esc_attr($lang_info['locale']) . '" />' . "\n";
-                echo '<meta name="language" content="' . esc_attr($current_lang) . '" />' . "\n";
-            }
-        }
-    }
-    
-    /**
-     * Add language rewrite rules
-     */
-    public function add_language_rewrite_rules($rules) {
-        if (!function_exists('pll_languages_list')) {
-            return $rules;
-        }
-        
-        $languages = pll_languages_list();
-        $new_rules = array();
-        
-        foreach ($languages as $lang) {
-            if ($lang === pll_default_language()) {
-                continue; // Skip default language
-            }
-            
-            // Add rules for WooCommerce pages
-            $new_rules[$lang . '/shop/?$'] = 'index.php?post_type=product&lang=' . $lang;
-            $new_rules[$lang . '/cart/?$'] = 'index.php?pagename=cart&lang=' . $lang;
-            $new_rules[$lang . '/checkout/?$'] = 'index.php?pagename=checkout&lang=' . $lang;
-            $new_rules[$lang . '/my-account/?$'] = 'index.php?pagename=my-account&lang=' . $lang;
-            
-            // Add rules for product categories
-            $new_rules[$lang . '/product-category/([^/]+)/?$'] = 'index.php?product_cat=$matches[1]&lang=' . $lang;
-            
-            // Add rules for product tags
-            $new_rules[$lang . '/product-tag/([^/]+)/?$'] = 'index.php?product_tag=$matches[1]&lang=' . $lang;
-            
-            // Add rules for individual products
-            $new_rules[$lang . '/product/([^/]+)/?$'] = 'index.php?product=$matches[1]&lang=' . $lang;
-        }
-        
-        return $new_rules + $rules;
-    }
-    
-    /**
-     * Fix WooCommerce translation URLs
-     */
-    public function fix_woocommerce_translation_urls($url, $lang) {
-        if (!is_woocommerce() && !is_cart() && !is_checkout() && !is_account_page()) {
-            return $url;
-        }
-        
-        $translated_url = $this->get_woocommerce_page_url_for_language($lang);
-        return $translated_url ?: $url;
-    }
-    
-    /**
-     * Get WooCommerce page URL for specific language
-     */
-    private function get_woocommerce_page_url_for_language($lang) {
+        // Translate WooCommerce page titles
         if (is_shop()) {
-            $shop_page_id = wc_get_page_id('shop');
-            return pll_get_post_language($shop_page_id) ? get_permalink(pll_get_post($shop_page_id, $lang)) : null;
-        } elseif (is_cart()) {
-            $cart_page_id = wc_get_page_id('cart');
-            return pll_get_post_language($cart_page_id) ? get_permalink(pll_get_post($cart_page_id, $lang)) : null;
-        } elseif (is_checkout()) {
-            $checkout_page_id = wc_get_page_id('checkout');
-            return pll_get_post_language($checkout_page_id) ? get_permalink(pll_get_post($checkout_page_id, $lang)) : null;
-        } elseif (is_account_page()) {
-            $account_page_id = wc_get_page_id('myaccount');
-            return pll_get_post_language($account_page_id) ? get_permalink(pll_get_post($account_page_id, $lang)) : null;
-        }
-        
-        return pll_home_url($lang);
-    }
-    
-    /**
-     * Add language information to structured data
-     */
-    public function add_language_to_structured_data($markup, $product) {
-        if (!function_exists('pll_current_language')) {
-            return $markup;
-        }
-        
-        $current_lang = pll_current_language();
-        if ($current_lang) {
-            $lang_info = pll_get_language($current_lang);
-            if ($lang_info) {
-                $markup['inLanguage'] = $lang_info['locale'];
+            $shop_title = pll__('Shop');
+            if ($shop_title) {
+                $title = $shop_title . ' ' . $sep . ' ' . get_bloginfo('name');
             }
         }
         
-        return $markup;
+        return $title;
     }
     
     /**
-     * Add language to sitemap URLs
+     * Modify document title parts
      */
-    public function add_language_to_sitemap_urls($url, $post) {
-        if (!function_exists('pll_get_post_language')) {
-            return $url;
+    public function modify_document_title_parts($title_parts) {
+        if (!wc_polylang_is_woocommerce_page() || !function_exists('pll__')) {
+            return $title_parts;
         }
         
-        if ($post->post_type === 'product') {
-            $lang = pll_get_post_language($post->ID);
-            if ($lang && $lang !== pll_default_language()) {
-                $url['loc'] = str_replace(home_url('/'), home_url('/' . $lang . '/'), $url['loc']);
+        if (is_shop() && isset($title_parts['title'])) {
+            $shop_title = pll__('Shop');
+            if ($shop_title) {
+                $title_parts['title'] = $shop_title;
             }
         }
         
-        return $url;
+        return $title_parts;
     }
 }

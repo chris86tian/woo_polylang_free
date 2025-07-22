@@ -19,10 +19,19 @@ class WC_Polylang_Admin {
     }
     
     private function __construct() {
-        add_action('admin_menu', array($this, 'add_admin_menu'));
-        add_action('admin_init', array($this, 'init_settings'));
-        add_action('admin_enqueue_scripts', array($this, 'enqueue_admin_scripts'));
-        add_action('wp_ajax_wc_polylang_sync_translations', array($this, 'ajax_sync_translations'));
+        if (!is_admin()) {
+            return;
+        }
+        
+        try {
+            add_action('admin_menu', array($this, 'add_admin_menu'));
+            add_action('admin_init', array($this, 'init_settings'));
+            add_action('admin_enqueue_scripts', array($this, 'enqueue_admin_scripts'));
+            
+            wc_polylang_debug_log('Admin class initialized');
+        } catch (Exception $e) {
+            wc_polylang_debug_log('Error in admin constructor: ' . $e->getMessage());
+        }
     }
     
     /**
@@ -58,9 +67,16 @@ class WC_Polylang_Admin {
      * Enqueue admin scripts
      */
     public function enqueue_admin_scripts($hook) {
-        if ('woocommerce_page_wc-polylang-integration' !== $hook) {
+        if (strpos($hook, 'wc-polylang-integration') === false) {
             return;
         }
+        
+        wp_enqueue_style(
+            'wc-polylang-admin',
+            WC_POLYLANG_INTEGRATION_PLUGIN_URL . 'assets/css/admin.css',
+            array(),
+            WC_POLYLANG_INTEGRATION_VERSION
+        );
         
         wp_enqueue_script(
             'wc-polylang-admin',
@@ -69,325 +85,129 @@ class WC_Polylang_Admin {
             WC_POLYLANG_INTEGRATION_VERSION,
             true
         );
-        
-        wp_localize_script('wc-polylang-admin', 'wcPolylangAdmin', array(
-            'ajaxUrl' => admin_url('admin-ajax.php'),
-            'nonce' => wp_create_nonce('wc_polylang_admin'),
-            'strings' => array(
-                'syncing' => __('Syncing translations...', 'wc-polylang-integration'),
-                'syncComplete' => __('Sync completed successfully!', 'wc-polylang-integration'),
-                'syncError' => __('Error during sync. Please try again.', 'wc-polylang-integration'),
-            )
-        ));
-        
-        wp_enqueue_style(
-            'wc-polylang-admin',
-            WC_POLYLANG_INTEGRATION_PLUGIN_URL . 'assets/css/admin.css',
-            array(),
-            WC_POLYLANG_INTEGRATION_VERSION
-        );
     }
     
     /**
      * Admin page
      */
     public function admin_page() {
-        $languages = function_exists('pll_languages_list') ? pll_languages_list() : array();
-        $stats = $this->get_translation_stats();
+        if (isset($_POST['submit'])) {
+            $this->save_settings();
+        }
+        
+        $settings = wc_polylang_get_settings();
+        $stats = wc_polylang_get_translation_stats();
+        
         ?>
         <div class="wrap">
             <h1><?php _e('WooCommerce Polylang Integration', 'wc-polylang-integration'); ?></h1>
             
-            <div class="wc-polylang-admin-container">
-                <!-- Status Dashboard -->
-                <div class="wc-polylang-dashboard">
-                    <h2><?php _e('Translation Status', 'wc-polylang-integration'); ?></h2>
-                    <div class="wc-polylang-stats">
-                        <div class="stat-box">
-                            <h3><?php echo $stats['products']['total']; ?></h3>
-                            <p><?php _e('Total Products', 'wc-polylang-integration'); ?></p>
-                        </div>
-                        <div class="stat-box">
-                            <h3><?php echo $stats['products']['translated']; ?></h3>
-                            <p><?php _e('Translated Products', 'wc-polylang-integration'); ?></p>
-                        </div>
-                        <div class="stat-box">
-                            <h3><?php echo $stats['categories']['total']; ?></h3>
-                            <p><?php _e('Total Categories', 'wc-polylang-integration'); ?></p>
-                        </div>
-                        <div class="stat-box">
-                            <h3><?php echo $stats['categories']['translated']; ?></h3>
-                            <p><?php _e('Translated Categories', 'wc-polylang-integration'); ?></p>
-                        </div>
+            <div class="notice notice-info">
+                <p><?php _e('Dieses Plugin integriert WooCommerce vollständig mit Polylang für eine umfassende Mehrsprachigkeit.', 'wc-polylang-integration'); ?></p>
+            </div>
+            
+            <div class="wc-polylang-stats">
+                <h2><?php _e('Übersetzungsstatistiken', 'wc-polylang-integration'); ?></h2>
+                <div class="stats-grid">
+                    <div class="stat-item">
+                        <h3><?php _e('Produkte', 'wc-polylang-integration'); ?></h3>
+                        <p><?php printf(__('%d von %d übersetzt (%d%%)', 'wc-polylang-integration'), $stats['products']['translated'], $stats['products']['total'], $stats['products']['percentage']); ?></p>
                     </div>
-                </div>
-                
-                <!-- Settings Form -->
-                <form method="post" action="options.php" class="wc-polylang-settings-form">
-                    <?php settings_fields('wc_polylang_settings'); ?>
-                    
-                    <table class="form-table">
-                        <tr>
-                            <th scope="row"><?php _e('Default Language', 'wc-polylang-integration'); ?></th>
-                            <td>
-                                <select name="wc_polylang_default_language">
-                                    <?php foreach ($languages as $lang): ?>
-                                        <option value="<?php echo esc_attr($lang); ?>" <?php selected(get_option('wc_polylang_default_language'), $lang); ?>>
-                                            <?php echo esc_html(strtoupper($lang)); ?>
-                                        </option>
-                                    <?php endforeach; ?>
-                                </select>
-                            </td>
-                        </tr>
-                        
-                        <tr>
-                            <th scope="row"><?php _e('Translation Features', 'wc-polylang-integration'); ?></th>
-                            <td>
-                                <fieldset>
-                                    <label>
-                                        <input type="checkbox" name="wc_polylang_enable_product_translation" value="yes" <?php checked(get_option('wc_polylang_enable_product_translation'), 'yes'); ?>>
-                                        <?php _e('Enable Product Translation', 'wc-polylang-integration'); ?>
-                                    </label><br>
-                                    
-                                    <label>
-                                        <input type="checkbox" name="wc_polylang_enable_category_translation" value="yes" <?php checked(get_option('wc_polylang_enable_category_translation'), 'yes'); ?>>
-                                        <?php _e('Enable Category Translation', 'wc-polylang-integration'); ?>
-                                    </label><br>
-                                    
-                                    <label>
-                                        <input type="checkbox" name="wc_polylang_enable_widget_translation" value="yes" <?php checked(get_option('wc_polylang_enable_widget_translation'), 'yes'); ?>>
-                                        <?php _e('Enable Widget Translation', 'wc-polylang-integration'); ?>
-                                    </label><br>
-                                    
-                                    <label>
-                                        <input type="checkbox" name="wc_polylang_enable_email_translation" value="yes" <?php checked(get_option('wc_polylang_enable_email_translation'), 'yes'); ?>>
-                                        <?php _e('Enable Email Translation', 'wc-polylang-integration'); ?>
-                                    </label><br>
-                                    
-                                    <label>
-                                        <input type="checkbox" name="wc_polylang_enable_custom_fields_translation" value="yes" <?php checked(get_option('wc_polylang_enable_custom_fields_translation'), 'yes'); ?>>
-                                        <?php _e('Enable Custom Fields Translation', 'wc-polylang-integration'); ?>
-                                    </label>
-                                </fieldset>
-                            </td>
-                        </tr>
-                        
-                        <tr>
-                            <th scope="row"><?php _e('SEO Features', 'wc-polylang-integration'); ?></th>
-                            <td>
-                                <fieldset>
-                                    <label>
-                                        <input type="checkbox" name="wc_polylang_seo_canonical_urls" value="yes" <?php checked(get_option('wc_polylang_seo_canonical_urls'), 'yes'); ?>>
-                                        <?php _e('Enable Canonical URLs', 'wc-polylang-integration'); ?>
-                                    </label><br>
-                                    
-                                    <label>
-                                        <input type="checkbox" name="wc_polylang_seo_hreflang_tags" value="yes" <?php checked(get_option('wc_polylang_seo_hreflang_tags'), 'yes'); ?>>
-                                        <?php _e('Enable hreflang Tags', 'wc-polylang-integration'); ?>
-                                    </label>
-                                </fieldset>
-                            </td>
-                        </tr>
-                    </table>
-                    
-                    <?php submit_button(); ?>
-                </form>
-                
-                <!-- Sync Tools -->
-                <div class="wc-polylang-tools">
-                    <h2><?php _e('Translation Tools', 'wc-polylang-integration'); ?></h2>
-                    <p><?php _e('Use these tools to manage your translations.', 'wc-polylang-integration'); ?></p>
-                    
-                    <button type="button" class="button button-primary" id="sync-translations">
-                        <?php _e('Sync All Translations', 'wc-polylang-integration'); ?>
-                    </button>
-                    
-                    <div id="sync-progress" style="display: none;">
-                        <div class="progress-bar">
-                            <div class="progress-fill"></div>
-                        </div>
-                        <p class="progress-text"></p>
+                    <div class="stat-item">
+                        <h3><?php _e('Kategorien', 'wc-polylang-integration'); ?></h3>
+                        <p><?php printf(__('%d von %d übersetzt (%d%%)', 'wc-polylang-integration'), $stats['categories']['translated'], $stats['categories']['total'], $stats['categories']['percentage']); ?></p>
                     </div>
-                </div>
-                
-                <!-- Language Status -->
-                <div class="wc-polylang-language-status">
-                    <h2><?php _e('Language Status', 'wc-polylang-integration'); ?></h2>
-                    <table class="wp-list-table widefat fixed striped">
-                        <thead>
-                            <tr>
-                                <th><?php _e('Language', 'wc-polylang-integration'); ?></th>
-                                <th><?php _e('Products', 'wc-polylang-integration'); ?></th>
-                                <th><?php _e('Categories', 'wc-polylang-integration'); ?></th>
-                                <th><?php _e('Status', 'wc-polylang-integration'); ?></th>
-                            </tr>
-                        </thead>
-                        <tbody>
-                            <?php foreach ($languages as $lang): ?>
-                                <?php $lang_stats = $this->get_language_stats($lang); ?>
-                                <tr>
-                                    <td><strong><?php echo esc_html(strtoupper($lang)); ?></strong></td>
-                                    <td><?php echo $lang_stats['products']; ?></td>
-                                    <td><?php echo $lang_stats['categories']; ?></td>
-                                    <td>
-                                        <?php if ($lang_stats['completion'] >= 80): ?>
-                                            <span class="status-complete"><?php _e('Complete', 'wc-polylang-integration'); ?></span>
-                                        <?php elseif ($lang_stats['completion'] >= 50): ?>
-                                            <span class="status-partial"><?php _e('Partial', 'wc-polylang-integration'); ?></span>
-                                        <?php else: ?>
-                                            <span class="status-incomplete"><?php _e('Incomplete', 'wc-polylang-integration'); ?></span>
-                                        <?php endif; ?>
-                                    </td>
-                                </tr>
-                            <?php endforeach; ?>
-                        </tbody>
-                    </table>
                 </div>
             </div>
+            
+            <form method="post" action="">
+                <?php wp_nonce_field('wc_polylang_settings', 'wc_polylang_nonce'); ?>
+                
+                <table class="form-table">
+                    <tr>
+                        <th scope="row"><?php _e('Produktübersetzungen aktivieren', 'wc-polylang-integration'); ?></th>
+                        <td>
+                            <input type="checkbox" name="enable_product_translation" value="yes" <?php checked($settings['enable_product_translation'], 'yes'); ?> />
+                            <p class="description"><?php _e('Aktiviert die Übersetzung von Produkten, Kategorien und Attributen.', 'wc-polylang-integration'); ?></p>
+                        </td>
+                    </tr>
+                    <tr>
+                        <th scope="row"><?php _e('Widget-Übersetzungen aktivieren', 'wc-polylang-integration'); ?></th>
+                        <td>
+                            <input type="checkbox" name="enable_widget_translation" value="yes" <?php checked($settings['enable_widget_translation'], 'yes'); ?> />
+                            <p class="description"><?php _e('Übersetzt WooCommerce-Widgets und Buttons.', 'wc-polylang-integration'); ?></p>
+                        </td>
+                    </tr>
+                    <tr>
+                        <th scope="row"><?php _e('E-Mail-Übersetzungen aktivieren', 'wc-polylang-integration'); ?></th>
+                        <td>
+                            <input type="checkbox" name="enable_email_translation" value="yes" <?php checked($settings['enable_email_translation'], 'yes'); ?> />
+                            <p class="description"><?php _e('Sendet E-Mails in der Sprache des Kunden.', 'wc-polylang-integration'); ?></p>
+                        </td>
+                    </tr>
+                    <tr>
+                        <th scope="row"><?php _e('SEO-Optimierung aktivieren', 'wc-polylang-integration'); ?></th>
+                        <td>
+                            <input type="checkbox" name="enable_seo_translation" value="yes" <?php checked($settings['enable_seo_translation'], 'yes'); ?> />
+                            <p class="description"><?php _e('Fügt hreflang-Tags und kanonische URLs hinzu.', 'wc-polylang-integration'); ?></p>
+                        </td>
+                    </tr>
+                </table>
+                
+                <?php submit_button(__('Einstellungen speichern', 'wc-polylang-integration')); ?>
+            </form>
         </div>
+        
+        <style>
+        .wc-polylang-stats {
+            background: #fff;
+            border: 1px solid #ccd0d4;
+            padding: 20px;
+            margin: 20px 0;
+        }
+        .stats-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 20px;
+            margin-top: 15px;
+        }
+        .stat-item {
+            text-align: center;
+            padding: 15px;
+            background: #f9f9f9;
+            border-radius: 4px;
+        }
+        .stat-item h3 {
+            margin: 0 0 10px 0;
+            color: #23282d;
+        }
+        .stat-item p {
+            margin: 0;
+            font-size: 18px;
+            font-weight: bold;
+            color: #0073aa;
+        }
+        </style>
         <?php
     }
     
     /**
-     * Get translation statistics
+     * Save settings
      */
-    private function get_translation_stats() {
-        $stats = array(
-            'products' => array(
-                'total' => wp_count_posts('product')->publish,
-                'translated' => 0
-            ),
-            'categories' => array(
-                'total' => wp_count_terms('product_cat'),
-                'translated' => 0
-            )
+    private function save_settings() {
+        if (!wp_verify_nonce($_POST['wc_polylang_nonce'], 'wc_polylang_settings')) {
+            return;
+        }
+        
+        $settings = array(
+            'enable_product_translation' => isset($_POST['enable_product_translation']) ? 'yes' : 'no',
+            'enable_widget_translation' => isset($_POST['enable_widget_translation']) ? 'yes' : 'no',
+            'enable_email_translation' => isset($_POST['enable_email_translation']) ? 'yes' : 'no',
+            'enable_seo_translation' => isset($_POST['enable_seo_translation']) ? 'yes' : 'no',
         );
         
-        // Count translated products
-        if (function_exists('pll_get_post_translations')) {
-            $products = get_posts(array(
-                'post_type' => 'product',
-                'post_status' => 'publish',
-                'numberposts' => -1,
-                'fields' => 'ids'
-            ));
-            
-            foreach ($products as $product_id) {
-                $translations = pll_get_post_translations($product_id);
-                if (count($translations) > 1) {
-                    $stats['products']['translated']++;
-                }
-            }
-        }
+        wc_polylang_update_settings($settings);
         
-        return $stats;
-    }
-    
-    /**
-     * Get language-specific statistics
-     */
-    private function get_language_stats($language) {
-        $stats = array(
-            'products' => 0,
-            'categories' => 0,
-            'completion' => 0
-        );
-        
-        if (function_exists('pll_get_post_translations')) {
-            // Count products in this language
-            $products = get_posts(array(
-                'post_type' => 'product',
-                'post_status' => 'publish',
-                'numberposts' => -1,
-                'fields' => 'ids',
-                'lang' => $language
-            ));
-            $stats['products'] = count($products);
-            
-            // Count categories in this language
-            $categories = get_terms(array(
-                'taxonomy' => 'product_cat',
-                'hide_empty' => false,
-                'lang' => $language
-            ));
-            $stats['categories'] = count($categories);
-            
-            // Calculate completion percentage
-            $total_products = wp_count_posts('product')->publish;
-            $total_categories = wp_count_terms('product_cat');
-            
-            if ($total_products > 0 || $total_categories > 0) {
-                $completion = (($stats['products'] + $stats['categories']) / ($total_products + $total_categories)) * 100;
-                $stats['completion'] = round($completion);
-            }
-        }
-        
-        return $stats;
-    }
-    
-    /**
-     * AJAX sync translations
-     */
-    public function ajax_sync_translations() {
-        check_ajax_referer('wc_polylang_admin', 'nonce');
-        
-        if (!current_user_can('manage_woocommerce')) {
-            wp_die(__('You do not have sufficient permissions to access this page.'));
-        }
-        
-        $result = $this->sync_all_translations();
-        
-        wp_send_json_success($result);
-    }
-    
-    /**
-     * Sync all translations
-     */
-    private function sync_all_translations() {
-        $synced = array(
-            'products' => 0,
-            'categories' => 0,
-            'attributes' => 0
-        );
-        
-        // Sync products
-        if (get_option('wc_polylang_enable_product_translation') === 'yes') {
-            $products = get_posts(array(
-                'post_type' => 'product',
-                'post_status' => 'publish',
-                'numberposts' => -1,
-                'fields' => 'ids'
-            ));
-            
-            foreach ($products as $product_id) {
-                if (function_exists('pll_set_post_language')) {
-                    $default_lang = get_option('wc_polylang_default_language', 'de');
-                    if (!pll_get_post_language($product_id)) {
-                        pll_set_post_language($product_id, $default_lang);
-                        $synced['products']++;
-                    }
-                }
-            }
-        }
-        
-        // Sync categories
-        if (get_option('wc_polylang_enable_category_translation') === 'yes') {
-            $categories = get_terms(array(
-                'taxonomy' => 'product_cat',
-                'hide_empty' => false
-            ));
-            
-            foreach ($categories as $category) {
-                if (function_exists('pll_set_term_language')) {
-                    $default_lang = get_option('wc_polylang_default_language', 'de');
-                    if (!pll_get_term_language($category->term_id)) {
-                        pll_set_term_language($category->term_id, $default_lang);
-                        $synced['categories']++;
-                    }
-                }
-            }
-        }
-        
-        return $synced;
+        echo '<div class="notice notice-success"><p>' . __('Einstellungen gespeichert.', 'wc-polylang-integration') . '</p></div>';
     }
 }
