@@ -203,10 +203,6 @@ class WC_Polylang_Integration {
             // Load components only if files exist
             $this->load_components();
             
-            // ENTFERNT: Admin-Menü wird NICHT mehr hier registriert!
-            // Das macht jetzt nur noch die Admin-Klasse
-            WC_Polylang_Debug::log("Admin-Menü wird von Admin-Klasse verwaltet", 'INFO');
-            
             // Add settings link
             add_filter('plugin_action_links_' . WC_POLYLANG_INTEGRATION_PLUGIN_BASENAME, array($this, 'add_settings_link'));
             
@@ -245,6 +241,7 @@ class WC_Polylang_Integration {
             'includes/functions.php',
             'includes/class-wc-polylang-admin.php',
             'includes/class-wc-polylang-products.php',
+            'includes/class-wc-polylang-categories.php',
             'includes/class-wc-polylang-elementor.php'
         );
         
@@ -289,6 +286,15 @@ class WC_Polylang_Integration {
                 WC_Polylang_Debug::log("WC_Polylang_Products erfolgreich initialisiert", 'SUCCESS');
             } else {
                 WC_Polylang_Debug::log("WC_Polylang_Products Klasse NICHT gefunden!", 'ERROR');
+            }
+            
+            WC_Polylang_Debug::log("Prüfe WC_Polylang_Categories Klasse...", 'DEBUG');
+            if (class_exists('WC_Polylang_Categories')) {
+                WC_Polylang_Debug::log("WC_Polylang_Categories Klasse gefunden - initialisiere...", 'DEBUG');
+                WC_Polylang_Categories::get_instance();
+                WC_Polylang_Debug::log("WC_Polylang_Categories erfolgreich initialisiert", 'SUCCESS');
+            } else {
+                WC_Polylang_Debug::log("WC_Polylang_Categories Klasse NICHT gefunden!", 'ERROR');
             }
             
             WC_Polylang_Debug::log("Prüfe WC_Polylang_Elementor Klasse...", 'DEBUG');
