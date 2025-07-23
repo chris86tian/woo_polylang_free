@@ -1,6 +1,6 @@
 <?php
 /**
- * Admin functionality - MIT DEBUG UND VOLLSTÄNDIGER ADMIN-SEITE
+ * Admin functionality - MIT SHOP-SEITEN INTEGRATION
  */
 
 if (!defined('ABSPATH')) {
@@ -51,10 +51,12 @@ class WC_Polylang_Admin {
     }
     
     /**
-     * Add admin menu - NUR HIER WIRD DAS MENÜ REGISTRIERT!
+     * Add admin menu - HAUPTMENÜ + UNTERMENÜS
      */
     public function add_admin_menu() {
-        wc_polylang_admin_debug_log("add_admin_menu() aufgerufen - registriere EINZIGES Menü");
+        wc_polylang_admin_debug_log("add_admin_menu() aufgerufen - registriere Hauptmenü und Untermenüs");
+        
+        // Hauptmenü
         add_submenu_page(
             'woocommerce',
             __('Polylang Integration', 'wc-polylang-integration'),
@@ -63,7 +65,13 @@ class WC_Polylang_Admin {
             'wc-polylang-integration',
             array($this, 'admin_page')
         );
-        wc_polylang_admin_debug_log("Admin-Menü erfolgreich registriert");
+        
+        wc_polylang_admin_debug_log("Hauptmenü erfolgreich registriert");
+        
+        // Lade Shop Config Klasse für Untermenü
+        if (!class_exists('WC_Polylang_Shop_Config')) {
+            require_once WC_POLYLANG_INTEGRATION_PLUGIN_DIR . 'includes/class-wc-polylang-shop-config.php';
+        }
     }
     
     /**
@@ -96,10 +104,10 @@ class WC_Polylang_Admin {
     }
     
     /**
-     * Admin page - VOLLSTÄNDIGE ADMIN-SEITE MIT LIPALIFE BRANDING
+     * Admin page - HAUPTSEITE MIT NAVIGATION
      */
     public function admin_page() {
-        wc_polylang_admin_debug_log("admin_page() aufgerufen - zeige vollständige Admin-Seite");
+        wc_polylang_admin_debug_log("admin_page() aufgerufen - zeige Hauptseite mit Navigation");
         
         if (isset($_POST['submit'])) {
             wc_polylang_admin_debug_log("Einstellungen werden gespeichert...");
@@ -118,6 +126,34 @@ class WC_Polylang_Admin {
             <div class="notice notice-success">
                 <p><strong>✅ Plugin erfolgreich aktiviert und HPOS-kompatibel!</strong></p>
                 <p>Das Plugin ist jetzt vollständig kompatibel mit WooCommerce High-Performance Order Storage (HPOS).</p>
+            </div>
+            
+            <!-- Navigation zu Unterseiten -->
+            <div class="wc-polylang-navigation">
+                <h2>🚀 Verfügbare Funktionen</h2>
+                <div class="nav-cards">
+                    <div class="nav-card">
+                        <h3>🛍️ Shop-Seiten</h3>
+                        <p>Konfigurieren Sie mehrsprachige WooCommerce-Seiten (Shop, Checkout, My Account)</p>
+                        <a href="<?php echo admin_url('admin.php?page=wc-polylang-shop-config'); ?>" class="button button-primary">
+                            Shop-Seiten konfigurieren
+                        </a>
+                    </div>
+                    <div class="nav-card">
+                        <h3>📁 Kategorien</h3>
+                        <p>Erstellen Sie hierarchische mehrsprachige Kategorie-Strukturen</p>
+                        <a href="<?php echo admin_url('admin.php?page=wc-polylang-categories'); ?>" class="button button-primary">
+                            Kategorien verwalten
+                        </a>
+                    </div>
+                    <div class="nav-card">
+                        <h3>⚙️ Einstellungen</h3>
+                        <p>Allgemeine Plugin-Einstellungen und Konfiguration</p>
+                        <a href="#settings" class="button button-secondary" onclick="document.getElementById('settings').scrollIntoView();">
+                            Zu Einstellungen
+                        </a>
+                    </div>
+                </div>
             </div>
             
             <div class="card">
@@ -155,53 +191,44 @@ class WC_Polylang_Admin {
                 </div>
             </div>
             
-            <form method="post" action="">
-                <?php wp_nonce_field('wc_polylang_settings', 'wc_polylang_nonce'); ?>
-                
-                <table class="form-table">
-                    <tr>
-                        <th scope="row"><?php _e('Produktübersetzungen aktivieren', 'wc-polylang-integration'); ?></th>
-                        <td>
-                            <input type="checkbox" name="enable_product_translation" value="yes" <?php checked($settings['enable_product_translation'], 'yes'); ?> />
-                            <p class="description"><?php _e('Aktiviert die Übersetzung von Produkten, Kategorien und Attributen.', 'wc-polylang-integration'); ?></p>
-                        </td>
-                    </tr>
-                    <tr>
-                        <th scope="row"><?php _e('Widget-Übersetzungen aktivieren', 'wc-polylang-integration'); ?></th>
-                        <td>
-                            <input type="checkbox" name="enable_widget_translation" value="yes" <?php checked($settings['enable_widget_translation'], 'yes'); ?> />
-                            <p class="description"><?php _e('Übersetzt WooCommerce-Widgets und Buttons.', 'wc-polylang-integration'); ?></p>
-                        </td>
-                    </tr>
-                    <tr>
-                        <th scope="row"><?php _e('E-Mail-Übersetzungen aktivieren', 'wc-polylang-integration'); ?></th>
-                        <td>
-                            <input type="checkbox" name="enable_email_translation" value="yes" <?php checked($settings['enable_email_translation'], 'yes'); ?> />
-                            <p class="description"><?php _e('Sendet E-Mails in der Sprache des Kunden.', 'wc-polylang-integration'); ?></p>
-                        </td>
-                    </tr>
-                    <tr>
-                        <th scope="row"><?php _e('SEO-Optimierung aktivieren', 'wc-polylang-integration'); ?></th>
-                        <td>
-                            <input type="checkbox" name="enable_seo_translation" value="yes" <?php checked($settings['enable_seo_translation'], 'yes'); ?> />
-                            <p class="description"><?php _e('Fügt hreflang-Tags und kanonische URLs hinzu.', 'wc-polylang-integration'); ?></p>
-                        </td>
-                    </tr>
-                </table>
-                
-                <?php submit_button(__('Einstellungen speichern', 'wc-polylang-integration')); ?>
-            </form>
-            
-            <div class="card">
-                <h2>🚀 Verfügbare Funktionen</h2>
-                <ul>
-                    <li>✅ Produkt-Übersetzungen</li>
-                    <li>✅ Kategorie-Übersetzungen</li>
-                    <li>✅ SEO-Optimierung</li>
-                    <li>✅ Elementor Pro Integration</li>
-                    <li>✅ Email-Übersetzungen</li>
-                    <li>✅ HPOS-Kompatibilität</li>
-                </ul>
+            <div id="settings">
+                <form method="post" action="">
+                    <?php wp_nonce_field('wc_polylang_settings', 'wc_polylang_nonce'); ?>
+                    
+                    <h2>⚙️ Plugin-Einstellungen</h2>
+                    <table class="form-table">
+                        <tr>
+                            <th scope="row"><?php _e('Produktübersetzungen aktivieren', 'wc-polylang-integration'); ?></th>
+                            <td>
+                                <input type="checkbox" name="enable_product_translation" value="yes" <?php checked($settings['enable_product_translation'], 'yes'); ?> />
+                                <p class="description"><?php _e('Aktiviert die Übersetzung von Produkten, Kategorien und Attributen.', 'wc-polylang-integration'); ?></p>
+                            </td>
+                        </tr>
+                        <tr>
+                            <th scope="row"><?php _e('Widget-Übersetzungen aktivieren', 'wc-polylang-integration'); ?></th>
+                            <td>
+                                <input type="checkbox" name="enable_widget_translation" value="yes" <?php checked($settings['enable_widget_translation'], 'yes'); ?> />
+                                <p class="description"><?php _e('Übersetzt WooCommerce-Widgets und Buttons.', 'wc-polylang-integration'); ?></p>
+                            </td>
+                        </tr>
+                        <tr>
+                            <th scope="row"><?php _e('E-Mail-Übersetzungen aktivieren', 'wc-polylang-integration'); ?></th>
+                            <td>
+                                <input type="checkbox" name="enable_email_translation" value="yes" <?php checked($settings['enable_email_translation'], 'yes'); ?> />
+                                <p class="description"><?php _e('Sendet E-Mails in der Sprache des Kunden.', 'wc-polylang-integration'); ?></p>
+                            </td>
+                        </tr>
+                        <tr>
+                            <th scope="row"><?php _e('SEO-Optimierung aktivieren', 'wc-polylang-integration'); ?></th>
+                            <td>
+                                <input type="checkbox" name="enable_seo_translation" value="yes" <?php checked($settings['enable_seo_translation'], 'yes'); ?> />
+                                <p class="description"><?php _e('Fügt hreflang-Tags und kanonische URLs hinzu.', 'wc-polylang-integration'); ?></p>
+                            </td>
+                        </tr>
+                    </table>
+                    
+                    <?php submit_button(__('Einstellungen speichern', 'wc-polylang-integration')); ?>
+                </form>
             </div>
             
             <div class="card">
@@ -298,6 +325,36 @@ class WC_Polylang_Admin {
             font-size: 18px;
             font-weight: bold;
             color: #0073aa;
+        }
+        
+        /* Navigation Cards */
+        .wc-polylang-navigation {
+            background: #fff;
+            border: 1px solid #ccd0d4;
+            padding: 20px;
+            margin: 20px 0;
+            border-radius: 4px;
+        }
+        .nav-cards {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+            gap: 20px;
+            margin-top: 15px;
+        }
+        .nav-card {
+            background: #f9f9f9;
+            border: 1px solid #ddd;
+            padding: 20px;
+            border-radius: 4px;
+            text-align: center;
+        }
+        .nav-card h3 {
+            margin: 0 0 10px 0;
+            color: #23282d;
+        }
+        .nav-card p {
+            margin: 0 0 15px 0;
+            color: #666;
         }
         </style>
         
