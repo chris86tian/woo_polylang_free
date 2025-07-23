@@ -1,62 +1,55 @@
 <?php
 /**
- * Admin functionality - MIT SHOP-SEITEN INTEGRATION UND BERECHTIGUNGSFIX
+ * Admin functionality - MIT OPTIMIERTEM DEBUG SYSTEM
  */
 
 if (!defined('ABSPATH')) {
     exit;
 }
 
-// Debug-Funktion für Admin-Klasse
-function wc_polylang_admin_debug_log($message, $level = 'INFO') {
+// Optimierte Debug-Funktion für Admin-Klasse
+function wc_polylang_admin_debug_log($message, $level = 'DEBUG') {
     if (class_exists('WC_Polylang_Debug')) {
-        WC_Polylang_Debug::log("ADMIN CLASS: " . $message, $level);
+        WC_Polylang_Debug::log("ADMIN: " . $message, $level);
     }
 }
-
-wc_polylang_admin_debug_log("class-wc-polylang-admin.php wird geladen...");
 
 class WC_Polylang_Admin {
     
     private static $instance = null;
     
     public static function get_instance() {
-        wc_polylang_admin_debug_log("get_instance() aufgerufen");
         if (null === self::$instance) {
-            wc_polylang_admin_debug_log("Erstelle neue Admin-Instanz");
+            wc_polylang_admin_debug_log("Admin-Instanz wird erstellt", 'INFO');
             self::$instance = new self();
         }
         return self::$instance;
     }
     
     private function __construct() {
-        wc_polylang_admin_debug_log("Admin Konstruktor gestartet");
-        
         if (!is_admin()) {
-            wc_polylang_admin_debug_log("Nicht im Admin-Bereich - beende Konstruktor");
             return;
         }
         
         try {
-            wc_polylang_admin_debug_log("Registriere Admin-Hooks...");
-            add_action('admin_menu', array($this, 'add_admin_menu'), 10); // Frühere Priorität
+            wc_polylang_admin_debug_log("Admin-Hooks werden registriert", 'DEBUG');
+            add_action('admin_menu', array($this, 'add_admin_menu'), 10);
             add_action('admin_init', array($this, 'init_settings'));
             add_action('admin_enqueue_scripts', array($this, 'enqueue_admin_scripts'));
             
-            wc_polylang_admin_debug_log("Admin-Hooks erfolgreich registriert");
-            wc_polylang_admin_debug_log("Admin class erfolgreich initialisiert");
+            wc_polylang_admin_debug_log("Admin erfolgreich initialisiert", 'INFO');
         } catch (Exception $e) {
             wc_polylang_admin_debug_log("Fehler im Admin-Konstruktor: " . $e->getMessage(), 'ERROR');
         }
     }
     
     /**
-     * Add admin menu - HAUPTMENÜ + UNTERMENÜS - BERECHTIGUNGSFIX
+     * Add admin menu
      */
     public function add_admin_menu() {
-        wc_polylang_admin_debug_log("add_admin_menu() aufgerufen - registriere Hauptmenü und Untermenüs");
+        wc_polylang_admin_debug_log("Admin-Menü wird registriert", 'DEBUG');
         
-        // HAUPTMENÜ ZUERST - Das war das Problem!
+        // HAUPTMENÜ
         add_submenu_page(
             'woocommerce',
             __('Polylang Integration', 'wc-polylang-integration'),
@@ -66,20 +59,16 @@ class WC_Polylang_Admin {
             array($this, 'admin_page')
         );
         
-        wc_polylang_admin_debug_log("Hauptmenü erfolgreich registriert");
-        
-        // JETZT können wir Untermenüs hinzufügen
+        // UNTERMENÜS
         $this->add_submenus();
         
-        wc_polylang_admin_debug_log("Alle Menüs erfolgreich registriert");
+        wc_polylang_admin_debug_log("Admin-Menü erfolgreich registriert", 'INFO');
     }
     
     /**
-     * Füge alle Untermenüs hinzu - NACH dem Hauptmenü
+     * Füge alle Untermenüs hinzu
      */
     private function add_submenus() {
-        wc_polylang_admin_debug_log("add_submenus() aufgerufen");
-        
         // Shop-Seiten Konfiguration
         add_submenu_page(
             'wc-polylang-integration',
@@ -90,7 +79,7 @@ class WC_Polylang_Admin {
             array($this, 'shop_config_page')
         );
         
-        // Bilinguale Kategorien - JETZT mit korrektem Parent!
+        // Bilinguale Kategorien
         add_submenu_page(
             'wc-polylang-integration',
             __('Bilinguale Kategorien', 'wc-polylang-integration'),
@@ -109,15 +98,12 @@ class WC_Polylang_Admin {
             'wc-polylang-categories',
             array($this, 'categories_page')
         );
-        
-        wc_polylang_admin_debug_log("Alle Untermenüs erfolgreich registriert");
     }
     
     /**
      * Initialize settings
      */
     public function init_settings() {
-        wc_polylang_admin_debug_log("init_settings() aufgerufen");
         register_setting('wc_polylang_settings', 'wc_polylang_enable_product_translation');
         register_setting('wc_polylang_settings', 'wc_polylang_enable_category_translation');
         register_setting('wc_polylang_settings', 'wc_polylang_enable_widget_translation');
@@ -127,35 +113,37 @@ class WC_Polylang_Admin {
         register_setting('wc_polylang_settings', 'wc_polylang_default_language');
         register_setting('wc_polylang_settings', 'wc_polylang_seo_canonical_urls');
         register_setting('wc_polylang_settings', 'wc_polylang_seo_hreflang_tags');
+        
+        // Debug-Einstellungen
+        register_setting('wc_polylang_settings', 'wc_polylang_debug_enabled');
+        register_setting('wc_polylang_settings', 'wc_polylang_debug_level');
     }
     
     /**
      * Enqueue admin scripts
      */
     public function enqueue_admin_scripts($hook) {
-        wc_polylang_admin_debug_log("enqueue_admin_scripts() aufgerufen für Hook: " . $hook);
         if (strpos($hook, 'wc-polylang-integration') === false) {
             return;
         }
         
-        // Simplified - no external files needed for now
-        wc_polylang_admin_debug_log("Admin-Scripts würden geladen werden (vereinfacht)");
+        wc_polylang_admin_debug_log("Admin-Scripts werden geladen für: " . $hook, 'DEBUG');
     }
     
     /**
-     * Admin page - HAUPTSEITE MIT NAVIGATION
+     * Admin page - HAUPTSEITE MIT DEBUG-KONFIGURATION
      */
     public function admin_page() {
-        wc_polylang_admin_debug_log("admin_page() aufgerufen - zeige Hauptseite mit Navigation");
+        wc_polylang_admin_debug_log("Hauptseite wird angezeigt", 'DEBUG');
         
         if (isset($_POST['submit'])) {
-            wc_polylang_admin_debug_log("Einstellungen werden gespeichert...");
             $this->save_settings();
         }
         
-        // Lade Einstellungen (mit Fallback)
+        // Lade Einstellungen
         $settings = $this->get_settings();
         $stats = $this->get_translation_stats();
+        $debug_settings = WC_Polylang_Debug::get_debug_settings();
         
         ?>
         <div class="wrap">
@@ -202,17 +190,50 @@ class WC_Polylang_Admin {
                 </div>
             </div>
             
+            <!-- DEBUG-KONFIGURATION - NEUE SEKTION -->
             <div class="card">
-                <h2>🔍 Debug Informationen</h2>
-                <p><strong>Debug-Log Datei:</strong> <code><?php echo WP_CONTENT_DIR . '/wc-polylang-debug.log'; ?></code></p>
+                <h2>🐛 Debug-Konfiguration</h2>
+                <p><strong>Debug-Status:</strong> <?php echo $debug_settings['enabled'] ? '✅ Aktiviert' : '❌ Deaktiviert'; ?></p>
+                <p><strong>Debug-Level:</strong> <?php echo $this->get_debug_level_name($debug_settings['level']); ?></p>
+                <p><strong>Log-Datei:</strong> <code><?php echo $debug_settings['file_path']; ?></code></p>
+                <p><strong>Log-Größe:</strong> <?php echo $this->format_file_size($debug_settings['file_size']); ?></p>
                 
-                <div style="margin: 20px 0;">
-                    <button type="button" class="button" onclick="location.reload()">🔄 Seite aktualisieren</button>
-                    <button type="button" class="button" onclick="clearDebugLog()">🗑️ Debug-Log löschen</button>
-                    <button type="button" class="button button-primary" onclick="showDebugLog()">📋 Debug-Log anzeigen</button>
-                </div>
+                <form id="debug-settings-form" style="margin: 20px 0;">
+                    <table class="form-table">
+                        <tr>
+                            <th scope="row">Debug aktivieren</th>
+                            <td>
+                                <label>
+                                    <input type="checkbox" id="debug-enabled" <?php checked($debug_settings['enabled'], true); ?>>
+                                    Debug-Logging aktivieren
+                                </label>
+                                <p class="description">Aktiviert das Logging von Debug-Informationen</p>
+                            </td>
+                        </tr>
+                        <tr>
+                            <th scope="row">Debug-Level</th>
+                            <td>
+                                <select id="debug-level">
+                                    <option value="0" <?php selected($debug_settings['level'], 0); ?>>Aus (Kein Debug)</option>
+                                    <option value="1" <?php selected($debug_settings['level'], 1); ?>>Nur Fehler</option>
+                                    <option value="2" <?php selected($debug_settings['level'], 2); ?>>Fehler + Warnungen</option>
+                                    <option value="3" <?php selected($debug_settings['level'], 3); ?>>Fehler + Warnungen + Infos</option>
+                                    <option value="4" <?php selected($debug_settings['level'], 4); ?>>Alles (Vollständig)</option>
+                                </select>
+                                <p class="description">Bestimmt welche Arten von Debug-Meldungen geloggt werden</p>
+                            </td>
+                        </tr>
+                    </table>
+                    
+                    <div style="margin: 20px 0;">
+                        <button type="button" id="save-debug-settings" class="button button-primary">💾 Debug-Einstellungen speichern</button>
+                        <button type="button" id="clear-debug-log" class="button button-secondary">🗑️ Debug-Log löschen</button>
+                        <button type="button" id="show-debug-log" class="button">📋 Debug-Log anzeigen</button>
+                        <button type="button" class="button" onclick="location.reload()">🔄 Seite aktualisieren</button>
+                    </div>
+                </form>
                 
-                <div id="debug-log-content" style="display:none; background:#f1f1f1; padding:15px; border-radius:4px; max-height:400px; overflow-y:auto;">
+                <div id="debug-log-content" style="display:none; background:#f1f1f1; padding:15px; border-radius:4px; max-height:400px; overflow-y:auto; margin-top:20px;">
                     <pre style="white-space: pre-wrap; font-size: 12px;"><?php 
                         if (class_exists('WC_Polylang_Debug')) {
                             echo esc_html(WC_Polylang_Debug::get_log_content()); 
@@ -302,6 +323,10 @@ class WC_Polylang_Admin {
                                 echo '⚠️ Nicht verfügbar';
                             }
                         ?></td>
+                    </tr>
+                    <tr>
+                        <td><strong>Debug-Status:</strong></td>
+                        <td><?php echo $debug_settings['enabled'] ? '✅ Aktiviert (' . $this->get_debug_level_name($debug_settings['level']) . ')' : '❌ Deaktiviert'; ?></td>
                     </tr>
                     <tr>
                         <td><strong>PHP Version:</strong></td>
@@ -405,37 +430,78 @@ class WC_Polylang_Admin {
         </style>
         
         <script>
-        function showDebugLog() {
-            var content = document.getElementById('debug-log-content');
-            if (content.style.display === 'none') {
-                content.style.display = 'block';
-            } else {
-                content.style.display = 'none';
-            }
-        }
-        
-        function clearDebugLog() {
-            if (confirm('Möchten Sie wirklich das Debug-Log löschen?')) {
-                fetch('<?php echo admin_url('admin-ajax.php'); ?>', {
-                    method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/x-www-form-urlencoded',
+        jQuery(document).ready(function($) {
+            // Debug-Einstellungen speichern
+            $('#save-debug-settings').on('click', function() {
+                var enabled = $('#debug-enabled').is(':checked');
+                var level = $('#debug-level').val();
+                
+                var button = $(this);
+                button.prop('disabled', true).text('💾 Speichere...');
+                
+                $.ajax({
+                    url: ajaxurl,
+                    type: 'POST',
+                    data: {
+                        action: 'wc_polylang_save_debug_settings',
+                        enabled: enabled,
+                        level: level,
+                        nonce: '<?php echo wp_create_nonce('wc_polylang_debug'); ?>'
                     },
-                    body: 'action=wc_polylang_clear_debug_log&nonce=<?php echo wp_create_nonce('wc_polylang_debug'); ?>'
-                }).then(() => {
-                    location.reload();
+                    success: function(response) {
+                        if (response.success) {
+                            alert('✅ Debug-Einstellungen gespeichert!');
+                            location.reload();
+                        } else {
+                            alert('❌ Fehler: ' + response.data);
+                        }
+                        button.prop('disabled', false).text('💾 Debug-Einstellungen speichern');
+                    }
                 });
-            }
-        }
+            });
+            
+            // Debug-Log anzeigen/verstecken
+            $('#show-debug-log').on('click', function() {
+                var content = $('#debug-log-content');
+                if (content.is(':visible')) {
+                    content.hide();
+                    $(this).text('📋 Debug-Log anzeigen');
+                } else {
+                    content.show();
+                    $(this).text('📋 Debug-Log verstecken');
+                }
+            });
+            
+            // Debug-Log löschen
+            $('#clear-debug-log').on('click', function() {
+                if (confirm('Möchten Sie wirklich das Debug-Log löschen?')) {
+                    $.ajax({
+                        url: ajaxurl,
+                        type: 'POST',
+                        data: {
+                            action: 'wc_polylang_clear_debug_log',
+                            nonce: '<?php echo wp_create_nonce('wc_polylang_debug'); ?>'
+                        },
+                        success: function(response) {
+                            if (response.success) {
+                                alert('✅ Debug-Log gelöscht!');
+                                location.reload();
+                            } else {
+                                alert('❌ Fehler: ' + response.data);
+                            }
+                        }
+                    });
+                }
+            });
+        });
         </script>
         <?php
     }
     
     /**
-     * Shop Config Page - NEUE METHODE
+     * Shop Config Page
      */
     public function shop_config_page() {
-        // Lade Shop Config Klasse falls nicht vorhanden
         if (!class_exists('WC_Polylang_Shop_Config')) {
             require_once WC_POLYLANG_INTEGRATION_PLUGIN_DIR . 'includes/class-wc-polylang-shop-config.php';
         }
@@ -449,10 +515,9 @@ class WC_Polylang_Admin {
     }
     
     /**
-     * Bilingual Categories Page - NEUE METHODE
+     * Bilingual Categories Page
      */
     public function bilingual_categories_page() {
-        // Lade Bilingual Categories Klasse falls nicht vorhanden
         if (!class_exists('WC_Polylang_Bilingual_Categories')) {
             require_once WC_POLYLANG_INTEGRATION_PLUGIN_DIR . 'includes/class-wc-polylang-bilingual-categories.php';
         }
@@ -466,10 +531,9 @@ class WC_Polylang_Admin {
     }
     
     /**
-     * Categories Page - NEUE METHODE
+     * Categories Page
      */
     public function categories_page() {
-        // Lade Categories Klasse falls nicht vorhanden
         if (!class_exists('WC_Polylang_Categories')) {
             require_once WC_POLYLANG_INTEGRATION_PLUGIN_DIR . 'includes/class-wc-polylang-categories.php';
         }
@@ -498,7 +562,6 @@ class WC_Polylang_Admin {
      * Get translation stats with fallback
      */
     private function get_translation_stats() {
-        // Fallback stats if functions don't exist
         return array(
             'products' => array(
                 'total' => wp_count_posts('product')->publish ?? 0,
@@ -517,7 +580,7 @@ class WC_Polylang_Admin {
      * Save settings
      */
     private function save_settings() {
-        wc_polylang_admin_debug_log("save_settings() aufgerufen");
+        wc_polylang_admin_debug_log("Einstellungen werden gespeichert", 'INFO');
         
         if (!wp_verify_nonce($_POST['wc_polylang_nonce'], 'wc_polylang_settings')) {
             wc_polylang_admin_debug_log("Nonce-Verifikation fehlgeschlagen", 'ERROR');
@@ -536,8 +599,33 @@ class WC_Polylang_Admin {
         }
         
         echo '<div class="notice notice-success"><p>' . __('Einstellungen gespeichert.', 'wc-polylang-integration') . '</p></div>';
-        wc_polylang_admin_debug_log("Einstellungen erfolgreich gespeichert");
+        wc_polylang_admin_debug_log("Einstellungen erfolgreich gespeichert", 'SUCCESS');
+    }
+    
+    /**
+     * Hole Debug-Level Namen
+     */
+    private function get_debug_level_name($level) {
+        switch ($level) {
+            case 0: return 'Aus';
+            case 1: return 'Nur Fehler';
+            case 2: return 'Fehler + Warnungen';
+            case 3: return 'Fehler + Warnungen + Infos';
+            case 4: return 'Vollständig';
+            default: return 'Unbekannt';
+        }
+    }
+    
+    /**
+     * Formatiere Dateigröße
+     */
+    private function format_file_size($bytes) {
+        if ($bytes == 0) return '0 Bytes';
+        
+        $k = 1024;
+        $sizes = array('Bytes', 'KB', 'MB', 'GB');
+        $i = floor(log($bytes) / log($k));
+        
+        return round($bytes / pow($k, $i), 2) . ' ' . $sizes[$i];
     }
 }
-
-wc_polylang_admin_debug_log("class-wc-polylang-admin.php erfolgreich geladen");

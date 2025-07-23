@@ -1,38 +1,32 @@
 <?php
 /**
- * Bilingual Categories - Kategorien in beiden Sprachen anzeigen
- * Entwickelt von LipaLIFE - www.lipalife.de
+ * Bilingual Categories - MIT OPTIMIERTEM DEBUG
  */
 
 if (!defined('ABSPATH')) {
     exit;
 }
 
-// Debug-Funktion für Bilingual Categories
-function wc_polylang_bilingual_debug_log($message, $level = 'INFO') {
+// Optimierte Debug-Funktion für Bilingual Categories
+function wc_polylang_bilingual_debug_log($message, $level = 'DEBUG') {
     if (class_exists('WC_Polylang_Debug')) {
-        WC_Polylang_Debug::log("BILINGUAL CATEGORIES: " . $message, $level);
+        WC_Polylang_Debug::log("BILINGUAL: " . $message, $level);
     }
 }
-
-wc_polylang_bilingual_debug_log("class-wc-polylang-bilingual-categories.php wird geladen...");
 
 class WC_Polylang_Bilingual_Categories {
     
     private static $instance = null;
     
     public static function get_instance() {
-        wc_polylang_bilingual_debug_log("get_instance() aufgerufen");
         if (null === self::$instance) {
-            wc_polylang_bilingual_debug_log("Erstelle neue Bilingual Categories-Instanz");
+            wc_polylang_bilingual_debug_log("Bilingual Categories-Instanz wird erstellt", 'INFO');
             self::$instance = new self();
         }
         return self::$instance;
     }
     
     private function __construct() {
-        wc_polylang_bilingual_debug_log("Bilingual Categories Konstruktor gestartet");
-        
         try {
             add_action('init', array($this, 'init'));
             
@@ -40,22 +34,20 @@ class WC_Polylang_Bilingual_Categories {
             add_action('wp_ajax_wc_polylang_save_bilingual_settings', array($this, 'ajax_save_bilingual_settings'));
             add_action('wp_ajax_wc_polylang_preview_bilingual_categories', array($this, 'ajax_preview_bilingual_categories'));
             
-            wc_polylang_bilingual_debug_log("Bilingual Categories Hooks erfolgreich registriert");
+            wc_polylang_bilingual_debug_log("Bilingual Categories erfolgreich initialisiert", 'INFO');
         } catch (Exception $e) {
             wc_polylang_bilingual_debug_log("Fehler im Bilingual Categories-Konstruktor: " . $e->getMessage(), 'ERROR');
         }
     }
     
     public function init() {
-        wc_polylang_bilingual_debug_log("Bilingual Categories init() aufgerufen");
-        
         try {
             // Frontend-Hooks für bilinguale Kategorien
             add_filter('woocommerce_product_categories_widget_args', array($this, 'modify_category_widget'));
             add_filter('get_terms', array($this, 'modify_category_display'), 10, 3);
             add_action('wp_enqueue_scripts', array($this, 'enqueue_frontend_scripts'));
             
-            wc_polylang_bilingual_debug_log("Bilingual Categories Frontend-Filter erfolgreich registriert");
+            wc_polylang_bilingual_debug_log("Bilingual Categories Frontend-Filter registriert", 'DEBUG');
         } catch (Exception $e) {
             wc_polylang_bilingual_debug_log("Fehler in Bilingual Categories init(): " . $e->getMessage(), 'ERROR');
         }
@@ -65,7 +57,7 @@ class WC_Polylang_Bilingual_Categories {
      * Admin-Seite für bilinguale Kategorien
      */
     public function admin_page() {
-        wc_polylang_bilingual_debug_log("admin_page() aufgerufen");
+        wc_polylang_bilingual_debug_log("Bilingual Categories Admin-Seite wird angezeigt", 'DEBUG');
         
         $current_settings = $this->get_bilingual_settings();
         $categories_preview = $this->get_categories_preview();
@@ -532,7 +524,7 @@ class WC_Polylang_Bilingual_Categories {
             wp_die('Nonce verification failed');
         }
         
-        wc_polylang_bilingual_debug_log("Bilinguale Einstellungen gespeichert");
+        wc_polylang_bilingual_debug_log("Bilinguale Einstellungen werden gespeichert", 'INFO');
         wp_send_json_success('Einstellungen erfolgreich gespeichert');
     }
     
@@ -579,5 +571,3 @@ class WC_Polylang_Bilingual_Categories {
         }
     }
 }
-
-wc_polylang_bilingual_debug_log("class-wc-polylang-bilingual-categories.php erfolgreich geladen");

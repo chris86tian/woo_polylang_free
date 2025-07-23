@@ -1,38 +1,32 @@
 <?php
 /**
- * Categories Management - Mehrsprachige Kategorien verwalten
- * Entwickelt von LipaLIFE - www.lipalife.de
+ * Categories Management - MIT OPTIMIERTEM DEBUG
  */
 
 if (!defined('ABSPATH')) {
     exit;
 }
 
-// Debug-Funktion für Categories
-function wc_polylang_categories_debug_log($message, $level = 'INFO') {
+// Optimierte Debug-Funktion für Categories
+function wc_polylang_categories_debug_log($message, $level = 'DEBUG') {
     if (class_exists('WC_Polylang_Debug')) {
         WC_Polylang_Debug::log("CATEGORIES: " . $message, $level);
     }
 }
-
-wc_polylang_categories_debug_log("class-wc-polylang-categories.php wird geladen...");
 
 class WC_Polylang_Categories {
     
     private static $instance = null;
     
     public static function get_instance() {
-        wc_polylang_categories_debug_log("get_instance() aufgerufen");
         if (null === self::$instance) {
-            wc_polylang_categories_debug_log("Erstelle neue Categories-Instanz");
+            wc_polylang_categories_debug_log("Categories-Instanz wird erstellt", 'INFO');
             self::$instance = new self();
         }
         return self::$instance;
     }
     
     private function __construct() {
-        wc_polylang_categories_debug_log("Categories Konstruktor gestartet");
-        
         try {
             add_action('init', array($this, 'init'));
             
@@ -41,21 +35,19 @@ class WC_Polylang_Categories {
             add_action('wp_ajax_wc_polylang_sync_categories', array($this, 'ajax_sync_categories'));
             add_action('wp_ajax_wc_polylang_bulk_translate_categories', array($this, 'ajax_bulk_translate_categories'));
             
-            wc_polylang_categories_debug_log("Categories Hooks erfolgreich registriert");
+            wc_polylang_categories_debug_log("Categories erfolgreich initialisiert", 'INFO');
         } catch (Exception $e) {
             wc_polylang_categories_debug_log("Fehler im Categories-Konstruktor: " . $e->getMessage(), 'ERROR');
         }
     }
     
     public function init() {
-        wc_polylang_categories_debug_log("Categories init() aufgerufen");
-        
         try {
             // Frontend-Hooks für Kategorien
             add_filter('get_terms', array($this, 'filter_translated_categories'), 10, 3);
             add_filter('woocommerce_product_categories_widget_args', array($this, 'filter_category_widget_args'));
             
-            wc_polylang_categories_debug_log("Categories Frontend-Filter erfolgreich registriert");
+            wc_polylang_categories_debug_log("Categories Frontend-Filter registriert", 'DEBUG');
         } catch (Exception $e) {
             wc_polylang_categories_debug_log("Fehler in Categories init(): " . $e->getMessage(), 'ERROR');
         }
@@ -65,7 +57,7 @@ class WC_Polylang_Categories {
      * Admin-Seite für Kategorien-Management
      */
     public function admin_page() {
-        wc_polylang_categories_debug_log("admin_page() aufgerufen");
+        wc_polylang_categories_debug_log("Categories Admin-Seite wird angezeigt", 'DEBUG');
         
         $categories_status = $this->get_categories_status();
         $languages = function_exists('pll_languages_list') ? pll_languages_list() : array('de', 'en');
@@ -503,7 +495,7 @@ class WC_Polylang_Categories {
     }
     
     /**
-     * Hole Kategorien-Status
+     * Hole Kategorien-Status - OPTIMIERT
      */
     private function get_categories_status() {
         $categories = get_terms(array(
@@ -577,7 +569,7 @@ class WC_Polylang_Categories {
             wp_die('Nonce verification failed');
         }
         
-        wc_polylang_categories_debug_log("Kategorie-Übersetzung erstellt");
+        wc_polylang_categories_debug_log("Kategorie-Übersetzung wird erstellt", 'INFO');
         wp_send_json_success('Kategorie-Übersetzung erfolgreich erstellt');
     }
     
@@ -589,7 +581,7 @@ class WC_Polylang_Categories {
             wp_die('Nonce verification failed');
         }
         
-        wc_polylang_categories_debug_log("Kategorien synchronisiert");
+        wc_polylang_categories_debug_log("Kategorien werden synchronisiert", 'INFO');
         wp_send_json_success('Kategorien erfolgreich synchronisiert');
     }
     
@@ -601,7 +593,7 @@ class WC_Polylang_Categories {
             wp_die('Nonce verification failed');
         }
         
-        wc_polylang_categories_debug_log("Bulk-Übersetzung durchgeführt");
+        wc_polylang_categories_debug_log("Bulk-Übersetzung wird durchgeführt", 'INFO');
         wp_send_json_success('Bulk-Übersetzung erfolgreich durchgeführt');
     }
     
@@ -623,5 +615,3 @@ class WC_Polylang_Categories {
         return $args;
     }
 }
-
-wc_polylang_categories_debug_log("class-wc-polylang-categories.php erfolgreich geladen");

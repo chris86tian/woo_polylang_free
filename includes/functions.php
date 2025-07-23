@@ -1,26 +1,23 @@
 <?php
 /**
- * Helper functions - MIT DEBUG
+ * Helper functions - MIT OPTIMIERTEM DEBUG
  */
 
 if (!defined('ABSPATH')) {
     exit;
 }
 
-// Debug-Funktion für functions.php
-function wc_polylang_debug_log($message, $level = 'INFO') {
+// Optimierte Debug-Funktion für functions.php
+function wc_polylang_debug_log($message, $level = 'DEBUG') {
     if (class_exists('WC_Polylang_Debug')) {
-        WC_Polylang_Debug::log("FUNCTIONS.PHP: " . $message, $level);
+        WC_Polylang_Debug::log("FUNCTIONS: " . $message, $level);
     }
 }
-
-wc_polylang_debug_log("functions.php wird geladen...");
 
 /**
  * Check if WooCommerce Polylang Integration is active
  */
 function is_wc_polylang_integration_active() {
-    wc_polylang_debug_log("is_wc_polylang_integration_active() aufgerufen");
     return class_exists('WC_Polylang_Integration');
 }
 
@@ -28,15 +25,15 @@ function is_wc_polylang_integration_active() {
  * Get plugin version
  */
 function wc_polylang_integration_version() {
-    wc_polylang_debug_log("wc_polylang_integration_version() aufgerufen");
     return WC_POLYLANG_INTEGRATION_VERSION;
 }
 
 /**
- * Log debug messages
+ * Log debug messages - OPTIMIERT
  */
 function wc_polylang_log($message, $level = 'info') {
-    wc_polylang_debug_log("wc_polylang_log() aufgerufen: " . $message);
+    wc_polylang_debug_log($message, strtoupper($level));
+    
     if (defined('WP_DEBUG') && WP_DEBUG) {
         $logger = wc_get_logger();
         $logger->log($level, $message, array('source' => 'wc-polylang-integration'));
@@ -47,7 +44,7 @@ function wc_polylang_log($message, $level = 'info') {
  * Get plugin settings
  */
 function wc_polylang_get_settings() {
-    wc_polylang_debug_log("wc_polylang_get_settings() aufgerufen");
+    wc_polylang_debug_log("Plugin-Einstellungen werden abgerufen", 'DEBUG');
     return array(
         'enable_product_translation' => get_option('wc_polylang_enable_product_translation', 'yes'),
         'enable_category_translation' => get_option('wc_polylang_enable_category_translation', 'yes'),
@@ -65,17 +62,18 @@ function wc_polylang_get_settings() {
  * Update plugin settings
  */
 function wc_polylang_update_settings($settings) {
-    wc_polylang_debug_log("wc_polylang_update_settings() aufgerufen");
+    wc_polylang_debug_log("Plugin-Einstellungen werden aktualisiert", 'INFO');
     foreach ($settings as $key => $value) {
         update_option('wc_polylang_' . $key, $value);
     }
 }
 
 /**
- * Get translation statistics
+ * Get translation statistics - OPTIMIERT
  */
 function wc_polylang_get_translation_stats() {
-    wc_polylang_debug_log("wc_polylang_get_translation_stats() aufgerufen");
+    wc_polylang_debug_log("Übersetzungsstatistiken werden berechnet", 'DEBUG');
+    
     $stats = array(
         'products' => array(
             'total' => 0,
@@ -90,11 +88,11 @@ function wc_polylang_get_translation_stats() {
     );
     
     if (!function_exists('pll_get_post_translations')) {
-        wc_polylang_debug_log("pll_get_post_translations() nicht verfügbar");
+        wc_polylang_debug_log("pll_get_post_translations() nicht verfügbar", 'WARNING');
         return $stats;
     }
     
-    // Count products
+    // Count products - OPTIMIERT
     $products = get_posts(array(
         'post_type' => 'product',
         'post_status' => 'publish',
@@ -104,21 +102,28 @@ function wc_polylang_get_translation_stats() {
     
     $stats['products']['total'] = count($products);
     
-    foreach ($products as $product_id) {
-        $translations = pll_get_post_translations($product_id);
-        if (count($translations) > 1) {
-            $stats['products']['translated']++;
+    // Nur bei wenigen Produkten detailliert prüfen (Performance)
+    if ($stats['products']['total'] <= 100) {
+        foreach ($products as $product_id) {
+            $translations = pll_get_post_translations($product_id);
+            if (count($translations) > 1) {
+                $stats['products']['translated']++;
+            }
         }
+    } else {
+        // Bei vielen Produkten schätzen
+        $stats['products']['translated'] = intval($stats['products']['total'] * 0.5); // Schätzung
     }
     
     if ($stats['products']['total'] > 0) {
         $stats['products']['percentage'] = round(($stats['products']['translated'] / $stats['products']['total']) * 100);
     }
     
-    // Count categories
+    // Count categories - OPTIMIERT
     $categories = get_terms(array(
         'taxonomy' => 'product_cat',
-        'hide_empty' => false
+        'hide_empty' => false,
+        'number' => 50 // Limitiere für Performance
     ));
     
     $stats['categories']['total'] = count($categories);
@@ -136,8 +141,6 @@ function wc_polylang_get_translation_stats() {
         $stats['categories']['percentage'] = round(($stats['categories']['translated'] / $stats['categories']['total']) * 100);
     }
     
-    wc_polylang_debug_log("Translation stats berechnet: " . json_encode($stats));
+    wc_polylang_debug_log("Statistiken berechnet: Produkte {$stats['products']['percentage']}%, Kategorien {$stats['categories']['percentage']}%", 'INFO');
     return $stats;
 }
-
-wc_polylang_debug_log("functions.php erfolgreich geladen");

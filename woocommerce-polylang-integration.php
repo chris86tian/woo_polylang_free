@@ -44,26 +44,56 @@ add_action('before_woocommerce_init', function() {
 });
 
 /**
- * CUSTOM DEBUG SYSTEM - Funktioniert IMMER!
+ * OPTIMIERTES DEBUG SYSTEM - KONFIGURIERBAR & WENIGER VERBOSE
  */
 class WC_Polylang_Debug {
     
     private static $log_file = null;
+    private static $debug_enabled = null;
+    private static $debug_level = null;
+    
+    // Debug-Level Konstanten
+    const LEVEL_OFF = 0;        // Kein Debug
+    const LEVEL_ERROR = 1;      // Nur Fehler
+    const LEVEL_WARNING = 2;    // Fehler + Warnungen
+    const LEVEL_INFO = 3;       // Fehler + Warnungen + wichtige Infos
+    const LEVEL_DEBUG = 4;      // Alles (wie vorher)
     
     public static function init() {
         self::$log_file = WP_CONTENT_DIR . '/wc-polylang-debug.log';
+        
+        // Lade Debug-Einstellungen
+        self::$debug_enabled = get_option('wc_polylang_debug_enabled', false);
+        self::$debug_level = get_option('wc_polylang_debug_level', self::LEVEL_ERROR);
+        
+        // Nur initialisieren wenn Debug aktiviert ist
+        if (!self::$debug_enabled) {
+            return;
+        }
         
         // Stelle sicher, dass die Log-Datei existiert und beschreibbar ist
         if (!file_exists(self::$log_file)) {
             @file_put_contents(self::$log_file, "=== WC Polylang Integration Debug Log ===\n");
         }
         
-        // Setze Error Handler
-        set_error_handler(array(__CLASS__, 'error_handler'));
-        register_shutdown_function(array(__CLASS__, 'shutdown_handler'));
+        // Setze Error Handler nur bei höherem Debug-Level
+        if (self::$debug_level >= self::LEVEL_WARNING) {
+            set_error_handler(array(__CLASS__, 'error_handler'));
+            register_shutdown_function(array(__CLASS__, 'shutdown_handler'));
+        }
     }
     
     public static function log($message, $level = 'INFO') {
+        // Prüfe ob Debug aktiviert ist
+        if (!self::is_debug_enabled()) {
+            return;
+        }
+        
+        // Prüfe Debug-Level
+        if (!self::should_log($level)) {
+            return;
+        }
+        
         if (!self::$log_file) {
             self::init();
         }
@@ -74,13 +104,58 @@ class WC_Polylang_Debug {
         // Schreibe in unsere eigene Log-Datei
         @file_put_contents(self::$log_file, $log_entry, FILE_APPEND | LOCK_EX);
         
-        // Zusätzlich in WordPress Debug Log (falls aktiviert)
-        if (defined('WP_DEBUG') && WP_DEBUG && function_exists('error_log')) {
+        // Zusätzlich in WordPress Debug Log (falls aktiviert und Level hoch genug)
+        if (defined('WP_DEBUG') && WP_DEBUG && function_exists('error_log') && self::$debug_level >= self::LEVEL_DEBUG) {
             error_log("WC Polylang: {$message}");
         }
     }
     
+    /**
+     * Prüfe ob Debug aktiviert ist
+     */
+    private static function is_debug_enabled() {
+        if (self::$debug_enabled === null) {
+            self::$debug_enabled = get_option('wc_polylang_debug_enabled', false);
+        }
+        return self::$debug_enabled;
+    }
+    
+    /**
+     * Prüfe ob Level geloggt werden soll
+     */
+    private static function should_log($level) {
+        if (self::$debug_level === null) {
+            self::$debug_level = get_option('wc_polylang_debug_level', self::LEVEL_ERROR);
+        }
+        
+        $level_priority = self::get_level_priority($level);
+        return $level_priority <= self::$debug_level;
+    }
+    
+    /**
+     * Hole Level-Priorität
+     */
+    private static function get_level_priority($level) {
+        switch (strtoupper($level)) {
+            case 'FATAL':
+            case 'ERROR':
+                return self::LEVEL_ERROR;
+            case 'WARNING':
+                return self::LEVEL_WARNING;
+            case 'INFO':
+            case 'SUCCESS':
+                return self::LEVEL_INFO;
+            case 'DEBUG':
+            default:
+                return self::LEVEL_DEBUG;
+        }
+    }
+    
     public static function error_handler($errno, $errstr, $errfile, $errline) {
+        if (!self::is_debug_enabled() || self::$debug_level < self::LEVEL_WARNING) {
+            return false;
+        }
+        
         $error_types = array(
             E_ERROR => 'ERROR',
             E_WARNING => 'WARNING',
@@ -110,6 +185,10 @@ class WC_Polylang_Debug {
     }
     
     public static function shutdown_handler() {
+        if (!self::is_debug_enabled() || self::$debug_level < self::LEVEL_ERROR) {
+            return;
+        }
+        
         $error = error_get_last();
         if ($error && ($error['type'] & (E_ERROR | E_PARSE | E_CORE_ERROR | E_COMPILE_ERROR))) {
             // Nur Fehler aus unserem Plugin loggen
@@ -131,16 +210,51 @@ class WC_Polylang_Debug {
         if (file_exists(self::$log_file)) {
             @unlink(self::$log_file);
         }
-        self::init();
+        if (self::is_debug_enabled()) {
+            self::init();
+        }
+    }
+    
+    /**
+     * Hole Debug-Einstellungen für Admin
+     */
+    public static function get_debug_settings() {
+        return array(
+            'enabled' => get_option('wc_polylang_debug_enabled', false),
+            'level' => get_option('wc_polylang_debug_level', self::LEVEL_ERROR),
+            'file_size' => file_exists(self::$log_file) ? filesize(self::$log_file) : 0,
+            'file_path' => self::$log_file
+        );
+    }
+    
+    /**
+     * Speichere Debug-Einstellungen
+     */
+    public static function save_debug_settings($enabled, $level) {
+        update_option('wc_polylang_debug_enabled', $enabled);
+        update_option('wc_polylang_debug_level', $level);
+        
+        // Aktualisiere interne Variablen
+        self::$debug_enabled = $enabled;
+        self::$debug_level = $level;
+        
+        // Re-initialisiere wenn aktiviert
+        if ($enabled) {
+            self::init();
+        }
     }
 }
 
-// Initialisiere Debug System SOFORT
+// Initialisiere Debug System nur wenn nötig
 WC_Polylang_Debug::init();
-WC_Polylang_Debug::log("Plugin wird geladen... (HPOS-kompatible Version von LipaLIFE)", 'INFO');
+
+// Nur loggen wenn Debug aktiviert und Level hoch genug
+if (get_option('wc_polylang_debug_enabled', false) && get_option('wc_polylang_debug_level', 1) >= 3) {
+    WC_Polylang_Debug::log("Plugin wird geladen... (HPOS-kompatible Version von LipaLIFE)", 'INFO');
+}
 
 /**
- * Main plugin class - MIT HPOS SUPPORT
+ * Main plugin class - MIT OPTIMIERTEM DEBUG
  */
 class WC_Polylang_Integration {
     
@@ -148,14 +262,14 @@ class WC_Polylang_Integration {
     
     public static function get_instance() {
         if (null === self::$instance) {
-            WC_Polylang_Debug::log("Erstelle Plugin-Instanz", 'INFO');
+            WC_Polylang_Debug::log("Plugin-Instanz wird erstellt", 'INFO');
             self::$instance = new self();
         }
         return self::$instance;
     }
     
     private function __construct() {
-        WC_Polylang_Debug::log("Plugin Konstruktor gestartet", 'INFO');
+        WC_Polylang_Debug::log("Plugin Konstruktor gestartet", 'DEBUG');
         
         try {
             // Simple initialization
@@ -163,7 +277,7 @@ class WC_Polylang_Integration {
             register_activation_hook(__FILE__, array($this, 'activate'));
             register_deactivation_hook(__FILE__, array($this, 'deactivate'));
             
-            WC_Polylang_Debug::log("Hooks registriert", 'INFO');
+            WC_Polylang_Debug::log("Plugin-Hooks registriert", 'DEBUG');
         } catch (Exception $e) {
             WC_Polylang_Debug::log("Fehler im Konstruktor: " . $e->getMessage(), 'ERROR');
         }
@@ -173,7 +287,7 @@ class WC_Polylang_Integration {
      * Initialize plugin
      */
     public function init() {
-        WC_Polylang_Debug::log("Plugin init() gestartet", 'INFO');
+        WC_Polylang_Debug::log("Plugin wird initialisiert", 'INFO');
         
         try {
             // Check HPOS compatibility
@@ -181,24 +295,20 @@ class WC_Polylang_Integration {
             
             // Basic dependency check
             if (!class_exists('WooCommerce')) {
-                WC_Polylang_Debug::log("WooCommerce nicht gefunden", 'WARNING');
+                WC_Polylang_Debug::log("WooCommerce nicht gefunden", 'ERROR');
                 add_action('admin_notices', function() {
                     echo '<div class="notice notice-error"><p>WooCommerce Polylang Integration benötigt WooCommerce.</p></div>';
                 });
                 return;
             }
             
-            WC_Polylang_Debug::log("WooCommerce gefunden", 'INFO');
-            
             if (!function_exists('pll_languages_list') && !class_exists('Polylang')) {
-                WC_Polylang_Debug::log("Polylang nicht gefunden", 'WARNING');
+                WC_Polylang_Debug::log("Polylang nicht gefunden", 'ERROR');
                 add_action('admin_notices', function() {
                     echo '<div class="notice notice-error"><p>WooCommerce Polylang Integration benötigt Polylang.</p></div>';
                 });
                 return;
             }
-            
-            WC_Polylang_Debug::log("Polylang gefunden", 'INFO');
             
             // Load components only if files exist
             $this->load_components();
@@ -209,7 +319,7 @@ class WC_Polylang_Integration {
             WC_Polylang_Debug::log("Plugin erfolgreich initialisiert", 'SUCCESS');
             
         } catch (Exception $e) {
-            WC_Polylang_Debug::log("Fehler in init(): " . $e->getMessage(), 'ERROR');
+            WC_Polylang_Debug::log("KRITISCHER FEHLER in init(): " . $e->getMessage(), 'FATAL');
         }
     }
     
@@ -217,17 +327,9 @@ class WC_Polylang_Integration {
      * Check HPOS compatibility
      */
     private function check_hpos_compatibility() {
-        WC_Polylang_Debug::log("Prüfe HPOS-Kompatibilität...", 'INFO');
-        
         if (class_exists('\Automattic\WooCommerce\Utilities\OrderUtil')) {
             $hpos_enabled = \Automattic\WooCommerce\Utilities\OrderUtil::custom_orders_table_usage_is_enabled();
             WC_Polylang_Debug::log("HPOS Status: " . ($hpos_enabled ? 'Aktiviert' : 'Deaktiviert'), 'INFO');
-            
-            if ($hpos_enabled) {
-                WC_Polylang_Debug::log("HPOS ist aktiviert - Plugin ist kompatibel", 'SUCCESS');
-            }
-        } else {
-            WC_Polylang_Debug::log("HPOS-Klassen nicht verfügbar (ältere WooCommerce-Version)", 'INFO');
         }
     }
     
@@ -235,13 +337,14 @@ class WC_Polylang_Integration {
      * Load components safely
      */
     private function load_components() {
-        WC_Polylang_Debug::log("Lade Komponenten...", 'INFO');
+        WC_Polylang_Debug::log("Lade Plugin-Komponenten", 'INFO');
         
         $files = array(
             'includes/functions.php',
             'includes/class-wc-polylang-admin.php',
             'includes/class-wc-polylang-products.php',
             'includes/class-wc-polylang-categories.php',
+            'includes/class-wc-polylang-bilingual-categories.php',
             'includes/class-wc-polylang-elementor.php'
         );
         
@@ -249,10 +352,9 @@ class WC_Polylang_Integration {
             $file_path = WC_POLYLANG_INTEGRATION_PLUGIN_DIR . $file;
             
             if (file_exists($file_path)) {
-                WC_Polylang_Debug::log("Lade Datei: {$file}", 'INFO');
                 try {
                     include_once $file_path;
-                    WC_Polylang_Debug::log("Datei erfolgreich geladen: {$file}", 'SUCCESS');
+                    WC_Polylang_Debug::log("Datei geladen: {$file}", 'DEBUG');
                 } catch (Exception $e) {
                     WC_Polylang_Debug::log("Fehler beim Laden von {$file}: " . $e->getMessage(), 'ERROR');
                 }
@@ -261,59 +363,39 @@ class WC_Polylang_Integration {
             }
         }
         
-        WC_Polylang_Debug::log("Alle Dateien geladen - starte Komponenten-Initialisierung", 'INFO');
-        
         // Initialize components safely
         try {
-            WC_Polylang_Debug::log("Prüfe Admin-Bereich...", 'DEBUG');
-            if (is_admin()) {
-                WC_Polylang_Debug::log("Admin-Bereich erkannt", 'DEBUG');
-                if (class_exists('WC_Polylang_Admin')) {
-                    WC_Polylang_Debug::log("WC_Polylang_Admin Klasse gefunden - initialisiere...", 'DEBUG');
-                    WC_Polylang_Admin::get_instance();
-                    WC_Polylang_Debug::log("WC_Polylang_Admin erfolgreich initialisiert", 'SUCCESS');
-                } else {
-                    WC_Polylang_Debug::log("WC_Polylang_Admin Klasse NICHT gefunden!", 'ERROR');
-                }
-            } else {
-                WC_Polylang_Debug::log("Nicht im Admin-Bereich", 'DEBUG');
+            if (is_admin() && class_exists('WC_Polylang_Admin')) {
+                WC_Polylang_Admin::get_instance();
+                WC_Polylang_Debug::log("Admin-Komponente initialisiert", 'DEBUG');
             }
             
-            WC_Polylang_Debug::log("Prüfe WC_Polylang_Products Klasse...", 'DEBUG');
             if (class_exists('WC_Polylang_Products')) {
-                WC_Polylang_Debug::log("WC_Polylang_Products Klasse gefunden - initialisiere...", 'DEBUG');
                 WC_Polylang_Products::get_instance();
-                WC_Polylang_Debug::log("WC_Polylang_Products erfolgreich initialisiert", 'SUCCESS');
-            } else {
-                WC_Polylang_Debug::log("WC_Polylang_Products Klasse NICHT gefunden!", 'ERROR');
+                WC_Polylang_Debug::log("Products-Komponente initialisiert", 'DEBUG');
             }
             
-            WC_Polylang_Debug::log("Prüfe WC_Polylang_Categories Klasse...", 'DEBUG');
             if (class_exists('WC_Polylang_Categories')) {
-                WC_Polylang_Debug::log("WC_Polylang_Categories Klasse gefunden - initialisiere...", 'DEBUG');
                 WC_Polylang_Categories::get_instance();
-                WC_Polylang_Debug::log("WC_Polylang_Categories erfolgreich initialisiert", 'SUCCESS');
-            } else {
-                WC_Polylang_Debug::log("WC_Polylang_Categories Klasse NICHT gefunden!", 'ERROR');
+                WC_Polylang_Debug::log("Categories-Komponente initialisiert", 'DEBUG');
             }
             
-            WC_Polylang_Debug::log("Prüfe WC_Polylang_Elementor Klasse...", 'DEBUG');
+            if (class_exists('WC_Polylang_Bilingual_Categories')) {
+                WC_Polylang_Bilingual_Categories::get_instance();
+                WC_Polylang_Debug::log("Bilingual Categories-Komponente initialisiert", 'DEBUG');
+            }
+            
             if (class_exists('WC_Polylang_Elementor')) {
-                WC_Polylang_Debug::log("WC_Polylang_Elementor Klasse gefunden - initialisiere...", 'DEBUG');
                 WC_Polylang_Elementor::get_instance();
-                WC_Polylang_Debug::log("WC_Polylang_Elementor erfolgreich initialisiert", 'SUCCESS');
-            } else {
-                WC_Polylang_Debug::log("WC_Polylang_Elementor Klasse NICHT gefunden!", 'ERROR');
+                WC_Polylang_Debug::log("Elementor-Komponente initialisiert", 'DEBUG');
             }
             
-            WC_Polylang_Debug::log("Alle Komponenten erfolgreich initialisiert!", 'SUCCESS');
+            WC_Polylang_Debug::log("Alle Komponenten erfolgreich initialisiert", 'SUCCESS');
             
         } catch (Exception $e) {
             WC_Polylang_Debug::log("KRITISCHER FEHLER beim Initialisieren der Komponenten: " . $e->getMessage(), 'FATAL');
-            WC_Polylang_Debug::log("Stack Trace: " . $e->getTraceAsString(), 'FATAL');
         } catch (Error $e) {
             WC_Polylang_Debug::log("FATAL ERROR beim Initialisieren der Komponenten: " . $e->getMessage(), 'FATAL');
-            WC_Polylang_Debug::log("Stack Trace: " . $e->getTraceAsString(), 'FATAL');
         }
     }
     
@@ -330,7 +412,7 @@ class WC_Polylang_Integration {
      * Plugin activation
      */
     public function activate() {
-        WC_Polylang_Debug::log("Plugin Aktivierung gestartet", 'INFO');
+        WC_Polylang_Debug::log("Plugin wird aktiviert", 'INFO');
         
         try {
             // Minimal activation - just flush rewrite rules
@@ -349,7 +431,7 @@ class WC_Polylang_Integration {
      * Plugin deactivation
      */
     public function deactivate() {
-        WC_Polylang_Debug::log("Plugin Deaktivierung gestartet", 'INFO');
+        WC_Polylang_Debug::log("Plugin wird deaktiviert", 'INFO');
         
         try {
             flush_rewrite_rules();
@@ -362,6 +444,20 @@ class WC_Polylang_Integration {
     }
 }
 
+// AJAX Handler für Debug-Einstellungen
+add_action('wp_ajax_wc_polylang_save_debug_settings', function() {
+    if (!wp_verify_nonce($_POST['nonce'], 'wc_polylang_debug')) {
+        wp_die('Nonce verification failed');
+    }
+    
+    $enabled = isset($_POST['enabled']) && $_POST['enabled'] === 'true';
+    $level = intval($_POST['level']);
+    
+    WC_Polylang_Debug::save_debug_settings($enabled, $level);
+    
+    wp_send_json_success('Debug-Einstellungen gespeichert');
+});
+
 // AJAX Handler für Debug-Log löschen
 add_action('wp_ajax_wc_polylang_clear_debug_log', function() {
     if (!wp_verify_nonce($_POST['nonce'], 'wc_polylang_debug')) {
@@ -369,20 +465,19 @@ add_action('wp_ajax_wc_polylang_clear_debug_log', function() {
     }
     
     WC_Polylang_Debug::clear_log();
-    wp_die('OK');
+    wp_send_json_success('Debug-Log gelöscht');
 });
 
 // Initialize plugin
 function wc_polylang_integration() {
-    WC_Polylang_Debug::log("Plugin Funktion aufgerufen", 'INFO');
     return WC_Polylang_Integration::get_instance();
 }
 
 // Start the plugin
 try {
-    WC_Polylang_Debug::log("Starte Plugin...", 'INFO');
+    WC_Polylang_Debug::log("Plugin wird gestartet", 'DEBUG');
     wc_polylang_integration();
-    WC_Polylang_Debug::log("Plugin gestartet", 'SUCCESS');
+    WC_Polylang_Debug::log("Plugin erfolgreich gestartet", 'SUCCESS');
 } catch (Exception $e) {
     WC_Polylang_Debug::log("KRITISCHER FEHLER beim Plugin-Start: " . $e->getMessage(), 'FATAL');
 } catch (Error $e) {
