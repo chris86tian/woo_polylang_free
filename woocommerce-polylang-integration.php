@@ -1,10 +1,11 @@
 <?php
 /**
  * Plugin Name: WooCommerce Polylang Integration
- * Plugin URI: https://example.com/woocommerce-polylang-integration
+ * Plugin URI: https://www.lipalife.de/woocommerce-polylang-integration
  * Description: Vollständige WooCommerce-Mehrsprachigkeit mit Polylang-Integration und Elementor Pro Support.
  * Version: 1.2.0
- * Author: Your Name
+ * Author: LipaLIFE
+ * Author URI: https://www.lipalife.de
  * Text Domain: wc-polylang-integration
  * Requires at least: 5.0
  * Tested up to: 6.4
@@ -12,8 +13,11 @@
  * WC requires at least: 7.0
  * WC tested up to: 8.5
  * License: GPL v2 or later
+ * License URI: https://www.gnu.org/licenses/gpl-2.0.html
  * 
  * @package WC_Polylang_Integration
+ * @author LipaLIFE
+ * @link https://www.lipalife.de
  */
 
 // Prevent direct access
@@ -133,7 +137,7 @@ class WC_Polylang_Debug {
 
 // Initialisiere Debug System SOFORT
 WC_Polylang_Debug::init();
-WC_Polylang_Debug::log("Plugin wird geladen... (HPOS-kompatible Version)", 'INFO');
+WC_Polylang_Debug::log("Plugin wird geladen... (HPOS-kompatible Version von LipaLIFE)", 'INFO');
 
 /**
  * Main plugin class - MIT HPOS SUPPORT
@@ -199,8 +203,9 @@ class WC_Polylang_Integration {
             // Load components only if files exist
             $this->load_components();
             
-            // Add admin menu
-            add_action('admin_menu', array($this, 'add_admin_menu'));
+            // ENTFERNT: Admin-Menü wird NICHT mehr hier registriert!
+            // Das macht jetzt nur noch die Admin-Klasse
+            WC_Polylang_Debug::log("Admin-Menü wird von Admin-Klasse verwaltet", 'INFO');
             
             // Add settings link
             add_filter('plugin_action_links_' . WC_POLYLANG_INTEGRATION_PLUGIN_BASENAME, array($this, 'add_settings_link'));
@@ -304,145 +309,6 @@ class WC_Polylang_Integration {
             WC_Polylang_Debug::log("FATAL ERROR beim Initialisieren der Komponenten: " . $e->getMessage(), 'FATAL');
             WC_Polylang_Debug::log("Stack Trace: " . $e->getTraceAsString(), 'FATAL');
         }
-    }
-    
-    /**
-     * Add admin menu
-     */
-    public function add_admin_menu() {
-        add_submenu_page(
-            'woocommerce',
-            'Polylang Integration',
-            '🌍 Polylang Integration',
-            'manage_woocommerce',
-            'wc-polylang-integration',
-            array($this, 'admin_page')
-        );
-    }
-    
-    /**
-     * Admin page
-     */
-    public function admin_page() {
-        ?>
-        <div class="wrap">
-            <h1>🌍 WooCommerce Polylang Integration</h1>
-            
-            <div class="notice notice-success">
-                <p><strong>✅ Plugin erfolgreich aktiviert und HPOS-kompatibel!</strong></p>
-                <p>Das Plugin ist jetzt vollständig kompatibel mit WooCommerce High-Performance Order Storage (HPOS).</p>
-            </div>
-            
-            <div class="card">
-                <h2>🔍 Debug Informationen</h2>
-                <p><strong>Debug-Log Datei:</strong> <code><?php echo WP_CONTENT_DIR . '/wc-polylang-debug.log'; ?></code></p>
-                
-                <div style="margin: 20px 0;">
-                    <button type="button" class="button" onclick="location.reload()">🔄 Seite aktualisieren</button>
-                    <button type="button" class="button" onclick="clearDebugLog()">🗑️ Debug-Log löschen</button>
-                    <button type="button" class="button button-primary" onclick="showDebugLog()">📋 Debug-Log anzeigen</button>
-                </div>
-                
-                <div id="debug-log-content" style="display:none; background:#f1f1f1; padding:15px; border-radius:4px; max-height:400px; overflow-y:auto;">
-                    <pre style="white-space: pre-wrap; font-size: 12px;"><?php echo esc_html(WC_Polylang_Debug::get_log_content()); ?></pre>
-                </div>
-            </div>
-            
-            <div class="card">
-                <h2>🚀 Verfügbare Funktionen</h2>
-                <ul>
-                    <li>✅ Produkt-Übersetzungen</li>
-                    <li>✅ Kategorie-Übersetzungen</li>
-                    <li>✅ SEO-Optimierung</li>
-                    <li>✅ Elementor Pro Integration</li>
-                    <li>✅ Email-Übersetzungen</li>
-                    <li>✅ HPOS-Kompatibilität</li>
-                </ul>
-            </div>
-            
-            <div class="card">
-                <h2>📊 System Status</h2>
-                <table class="widefat">
-                    <tr>
-                        <td><strong>WooCommerce:</strong></td>
-                        <td><?php echo class_exists('WooCommerce') ? '✅ Aktiv' : '❌ Nicht gefunden'; ?></td>
-                    </tr>
-                    <tr>
-                        <td><strong>Polylang:</strong></td>
-                        <td><?php echo function_exists('pll_languages_list') ? '✅ Aktiv' : '❌ Nicht gefunden'; ?></td>
-                    </tr>
-                    <tr>
-                        <td><strong>Elementor Pro:</strong></td>
-                        <td><?php echo defined('ELEMENTOR_PRO_VERSION') ? '✅ Aktiv' : '⚠️ Nicht gefunden'; ?></td>
-                    </tr>
-                    <tr>
-                        <td><strong>HPOS (High-Performance Orders):</strong></td>
-                        <td><?php 
-                            if (class_exists('\Automattic\WooCommerce\Utilities\OrderUtil')) {
-                                $hpos_enabled = \Automattic\WooCommerce\Utilities\OrderUtil::custom_orders_table_usage_is_enabled();
-                                echo $hpos_enabled ? '✅ Aktiviert & Kompatibel' : '⚠️ Deaktiviert';
-                            } else {
-                                echo '⚠️ Nicht verfügbar';
-                            }
-                        ?></td>
-                    </tr>
-                    <tr>
-                        <td><strong>PHP Version:</strong></td>
-                        <td><?php echo PHP_VERSION; ?></td>
-                    </tr>
-                    <tr>
-                        <td><strong>WordPress Version:</strong></td>
-                        <td><?php echo get_bloginfo('version'); ?></td>
-                    </tr>
-                    <tr>
-                        <td><strong>Plugin Version:</strong></td>
-                        <td><?php echo WC_POLYLANG_INTEGRATION_VERSION; ?></td>
-                    </tr>
-                </table>
-            </div>
-        </div>
-        
-        <style>
-        .card {
-            background: #fff;
-            border: 1px solid #ccd0d4;
-            padding: 20px;
-            margin: 20px 0;
-            border-radius: 4px;
-        }
-        .card h2 {
-            margin-top: 0;
-        }
-        .widefat td {
-            padding: 10px;
-        }
-        </style>
-        
-        <script>
-        function showDebugLog() {
-            var content = document.getElementById('debug-log-content');
-            if (content.style.display === 'none') {
-                content.style.display = 'block';
-            } else {
-                content.style.display = 'none';
-            }
-        }
-        
-        function clearDebugLog() {
-            if (confirm('Möchten Sie wirklich das Debug-Log löschen?')) {
-                fetch('<?php echo admin_url('admin-ajax.php'); ?>', {
-                    method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/x-www-form-urlencoded',
-                    },
-                    body: 'action=wc_polylang_clear_debug_log&nonce=<?php echo wp_create_nonce('wc_polylang_debug'); ?>'
-                }).then(() => {
-                    location.reload();
-                });
-            }
-        }
-        </script>
-        <?php
     }
     
     /**

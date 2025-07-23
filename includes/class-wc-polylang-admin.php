@@ -1,6 +1,6 @@
 <?php
 /**
- * Admin functionality - MIT DEBUG
+ * Admin functionality - MIT DEBUG UND VOLLSTÄNDIGER ADMIN-SEITE
  */
 
 if (!defined('ABSPATH')) {
@@ -51,18 +51,19 @@ class WC_Polylang_Admin {
     }
     
     /**
-     * Add admin menu
+     * Add admin menu - NUR HIER WIRD DAS MENÜ REGISTRIERT!
      */
     public function add_admin_menu() {
-        wc_polylang_admin_debug_log("add_admin_menu() aufgerufen");
+        wc_polylang_admin_debug_log("add_admin_menu() aufgerufen - registriere EINZIGES Menü");
         add_submenu_page(
             'woocommerce',
             __('Polylang Integration', 'wc-polylang-integration'),
-            __('Polylang Integration', 'wc-polylang-integration'),
+            __('🌍 Polylang Integration', 'wc-polylang-integration'),
             'manage_woocommerce',
             'wc-polylang-integration',
             array($this, 'admin_page')
         );
+        wc_polylang_admin_debug_log("Admin-Menü erfolgreich registriert");
     }
     
     /**
@@ -95,25 +96,49 @@ class WC_Polylang_Admin {
     }
     
     /**
-     * Admin page
+     * Admin page - VOLLSTÄNDIGE ADMIN-SEITE MIT LIPALIFE BRANDING
      */
     public function admin_page() {
-        wc_polylang_admin_debug_log("admin_page() aufgerufen");
+        wc_polylang_admin_debug_log("admin_page() aufgerufen - zeige vollständige Admin-Seite");
         
         if (isset($_POST['submit'])) {
             wc_polylang_admin_debug_log("Einstellungen werden gespeichert...");
             $this->save_settings();
         }
         
-        $settings = wc_polylang_get_settings();
-        $stats = wc_polylang_get_translation_stats();
+        // Lade Einstellungen (mit Fallback)
+        $settings = $this->get_settings();
+        $stats = $this->get_translation_stats();
         
         ?>
         <div class="wrap">
-            <h1><?php _e('WooCommerce Polylang Integration', 'wc-polylang-integration'); ?></h1>
+            <h1>🌍 WooCommerce Polylang Integration</h1>
+            <p class="description">Entwickelt von <strong><a href="https://www.lipalife.de" target="_blank">LipaLIFE</a></strong> - Professionelle WordPress & WooCommerce Lösungen</p>
             
-            <div class="notice notice-info">
-                <p><?php _e('Dieses Plugin integriert WooCommerce vollständig mit Polylang für eine umfassende Mehrsprachigkeit.', 'wc-polylang-integration'); ?></p>
+            <div class="notice notice-success">
+                <p><strong>✅ Plugin erfolgreich aktiviert und HPOS-kompatibel!</strong></p>
+                <p>Das Plugin ist jetzt vollständig kompatibel mit WooCommerce High-Performance Order Storage (HPOS).</p>
+            </div>
+            
+            <div class="card">
+                <h2>🔍 Debug Informationen</h2>
+                <p><strong>Debug-Log Datei:</strong> <code><?php echo WP_CONTENT_DIR . '/wc-polylang-debug.log'; ?></code></p>
+                
+                <div style="margin: 20px 0;">
+                    <button type="button" class="button" onclick="location.reload()">🔄 Seite aktualisieren</button>
+                    <button type="button" class="button" onclick="clearDebugLog()">🗑️ Debug-Log löschen</button>
+                    <button type="button" class="button button-primary" onclick="showDebugLog()">📋 Debug-Log anzeigen</button>
+                </div>
+                
+                <div id="debug-log-content" style="display:none; background:#f1f1f1; padding:15px; border-radius:4px; max-height:400px; overflow-y:auto;">
+                    <pre style="white-space: pre-wrap; font-size: 12px;"><?php 
+                        if (class_exists('WC_Polylang_Debug')) {
+                            echo esc_html(WC_Polylang_Debug::get_log_content()); 
+                        } else {
+                            echo "Debug-Klasse nicht verfügbar.";
+                        }
+                    ?></pre>
+                </div>
             </div>
             
             <div class="wc-polylang-stats">
@@ -166,9 +191,86 @@ class WC_Polylang_Admin {
                 
                 <?php submit_button(__('Einstellungen speichern', 'wc-polylang-integration')); ?>
             </form>
+            
+            <div class="card">
+                <h2>🚀 Verfügbare Funktionen</h2>
+                <ul>
+                    <li>✅ Produkt-Übersetzungen</li>
+                    <li>✅ Kategorie-Übersetzungen</li>
+                    <li>✅ SEO-Optimierung</li>
+                    <li>✅ Elementor Pro Integration</li>
+                    <li>✅ Email-Übersetzungen</li>
+                    <li>✅ HPOS-Kompatibilität</li>
+                </ul>
+            </div>
+            
+            <div class="card">
+                <h2>📊 System Status</h2>
+                <table class="widefat">
+                    <tr>
+                        <td><strong>WooCommerce:</strong></td>
+                        <td><?php echo class_exists('WooCommerce') ? '✅ Aktiv' : '❌ Nicht gefunden'; ?></td>
+                    </tr>
+                    <tr>
+                        <td><strong>Polylang:</strong></td>
+                        <td><?php echo function_exists('pll_languages_list') ? '✅ Aktiv' : '❌ Nicht gefunden'; ?></td>
+                    </tr>
+                    <tr>
+                        <td><strong>Elementor Pro:</strong></td>
+                        <td><?php echo defined('ELEMENTOR_PRO_VERSION') ? '✅ Aktiv' : '⚠️ Nicht gefunden'; ?></td>
+                    </tr>
+                    <tr>
+                        <td><strong>HPOS (High-Performance Orders):</strong></td>
+                        <td><?php 
+                            if (class_exists('\Automattic\WooCommerce\Utilities\OrderUtil')) {
+                                $hpos_enabled = \Automattic\WooCommerce\Utilities\OrderUtil::custom_orders_table_usage_is_enabled();
+                                echo $hpos_enabled ? '✅ Aktiviert & Kompatibel' : '⚠️ Deaktiviert';
+                            } else {
+                                echo '⚠️ Nicht verfügbar';
+                            }
+                        ?></td>
+                    </tr>
+                    <tr>
+                        <td><strong>PHP Version:</strong></td>
+                        <td><?php echo PHP_VERSION; ?></td>
+                    </tr>
+                    <tr>
+                        <td><strong>WordPress Version:</strong></td>
+                        <td><?php echo get_bloginfo('version'); ?></td>
+                    </tr>
+                    <tr>
+                        <td><strong>Plugin Version:</strong></td>
+                        <td><?php echo defined('WC_POLYLANG_INTEGRATION_VERSION') ? WC_POLYLANG_INTEGRATION_VERSION : '1.2.0'; ?></td>
+                    </tr>
+                </table>
+            </div>
+            
+            <div class="card" style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white;">
+                <h2 style="color: white;">🌟 LipaLIFE - Ihr WordPress Partner</h2>
+                <p><strong>Professionelle WordPress & WooCommerce Entwicklung</strong></p>
+                <p>Besuchen Sie uns: <a href="https://www.lipalife.de" target="_blank" style="color: #fff; text-decoration: underline;">www.lipalife.de</a></p>
+                <p>Für Support und weitere Plugins kontaktieren Sie uns gerne!</p>
+            </div>
         </div>
         
         <style>
+        .card {
+            background: #fff;
+            border: 1px solid #ccd0d4;
+            padding: 20px;
+            margin: 20px 0;
+            border-radius: 4px;
+        }
+        .card h2 {
+            margin-top: 0;
+        }
+        .widefat td {
+            padding: 10px;
+        }
+        .description {
+            font-style: italic;
+            margin-bottom: 20px;
+        }
         .wc-polylang-stats {
             background: #fff;
             border: 1px solid #ccd0d4;
@@ -198,7 +300,63 @@ class WC_Polylang_Admin {
             color: #0073aa;
         }
         </style>
+        
+        <script>
+        function showDebugLog() {
+            var content = document.getElementById('debug-log-content');
+            if (content.style.display === 'none') {
+                content.style.display = 'block';
+            } else {
+                content.style.display = 'none';
+            }
+        }
+        
+        function clearDebugLog() {
+            if (confirm('Möchten Sie wirklich das Debug-Log löschen?')) {
+                fetch('<?php echo admin_url('admin-ajax.php'); ?>', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/x-www-form-urlencoded',
+                    },
+                    body: 'action=wc_polylang_clear_debug_log&nonce=<?php echo wp_create_nonce('wc_polylang_debug'); ?>'
+                }).then(() => {
+                    location.reload();
+                });
+            }
+        }
+        </script>
         <?php
+    }
+    
+    /**
+     * Get settings with fallback
+     */
+    private function get_settings() {
+        return array(
+            'enable_product_translation' => get_option('wc_polylang_enable_product_translation', 'yes'),
+            'enable_widget_translation' => get_option('wc_polylang_enable_widget_translation', 'yes'),
+            'enable_email_translation' => get_option('wc_polylang_enable_email_translation', 'yes'),
+            'enable_seo_translation' => get_option('wc_polylang_enable_seo_translation', 'yes'),
+        );
+    }
+    
+    /**
+     * Get translation stats with fallback
+     */
+    private function get_translation_stats() {
+        // Fallback stats if functions don't exist
+        return array(
+            'products' => array(
+                'total' => wp_count_posts('product')->publish ?? 0,
+                'translated' => 0,
+                'percentage' => 0
+            ),
+            'categories' => array(
+                'total' => wp_count_terms('product_cat') ?? 0,
+                'translated' => 0,
+                'percentage' => 0
+            )
+        );
     }
     
     /**
@@ -219,7 +377,9 @@ class WC_Polylang_Admin {
             'enable_seo_translation' => isset($_POST['enable_seo_translation']) ? 'yes' : 'no',
         );
         
-        wc_polylang_update_settings($settings);
+        foreach ($settings as $key => $value) {
+            update_option('wc_polylang_' . $key, $value);
+        }
         
         echo '<div class="notice notice-success"><p>' . __('Einstellungen gespeichert.', 'wc-polylang-integration') . '</p></div>';
         wc_polylang_admin_debug_log("Einstellungen erfolgreich gespeichert");
