@@ -19,21 +19,33 @@ class WC_Polylang_Elementor {
     }
     
     private function __construct() {
+        // Only initialize if Elementor Pro is active
+        add_action('init', array($this, 'init'));
+    }
+    
+    /**
+     * Initialize
+     */
+    public function init() {
         // Check if Elementor Pro is active
         if (!$this->is_elementor_pro_active()) {
             return;
         }
         
-        add_action('init', array($this, 'init'));
+        // Add admin menu
         add_action('admin_menu', array($this, 'add_elementor_menu'));
+        
+        // Add AJAX handlers
         add_action('wp_ajax_wc_polylang_duplicate_elementor_templates', array($this, 'duplicate_templates'));
-        add_action('wp_ajax_wc_polylang_sync_elementor_content', array($this, 'sync_content'));
         
-        // Elementor hooks
-        add_action('elementor/template/after_save', array($this, 'handle_template_save'), 10, 2);
+        // Add Polylang support for Elementor templates
+        add_filter('pll_get_post_types', array($this, 'add_elementor_post_types'));
+        
+        // Handle WooCommerce template conditions
+        add_filter('elementor_pro/theme_builder/conditions_manager/get_conditions', array($this, 'add_language_conditions'));
+        
+        // Handle template filtering
         add_filter('elementor/theme/get_location_templates', array($this, 'filter_location_templates'), 10, 2);
-        
-        wc_polylang_debug_log('Elementor Pro integration initialized');
     }
     
     /**
@@ -41,20 +53,6 @@ class WC_Polylang_Elementor {
      */
     private function is_elementor_pro_active() {
         return defined('ELEMENTOR_PRO_VERSION') && class_exists('ElementorPro\Plugin');
-    }
-    
-    /**
-     * Initialize
-     */
-    public function init() {
-        // Add Polylang support for Elementor templates
-        add_filter('pll_get_post_types', array($this, 'add_elementor_post_types'));
-        
-        // Handle WooCommerce template conditions
-        add_filter('elementor_pro/theme_builder/conditions_manager/get_conditions', array($this, 'add_language_conditions'));
-        
-        // Modify Elementor widgets for multilingual support
-        add_action('elementor/widgets/widgets_registered', array($this, 'modify_woocommerce_widgets'));
     }
     
     /**
@@ -80,7 +78,7 @@ class WC_Polylang_Elementor {
                 'name' => 'polylang_language_' . $language,
                 'label' => sprintf(__('Language: %s', 'wc-polylang-integration'), strtoupper($language)),
                 'callback' => function() use ($language) {
-                    return pll_current_language() === $language;
+                    return function_exists('pll_current_language') && pll_current_language() === $language;
                 }
             );
         }
@@ -106,8 +104,15 @@ class WC_Polylang_Elementor {
      * Elementor templates page
      */
     public function elementor_page() {
+        if (!$this->is_elementor_pro_active()) {
+            echo '<div class="wrap">';
+            echo '<h1>' . __('Elementor Pro Integration', 'wc-polylang-integration') . '</h1>';
+            echo '<div class="notice notice-warning"><p>' . __('Elementor Pro ist nicht installiert oder aktiviert.', 'wc-polylang-integration') . '</p></div>';
+            echo '</div>';
+            return;
+        }
+        
         $templates = $this->get_woocommerce_templates();
-        $languages = function_exists('pll_languages_list') ? pll_languages_list() : array();
         
         ?>
         <div class="wrap">
@@ -123,9 +128,6 @@ class WC_Polylang_Elementor {
                 <div class="action-buttons">
                     <button type="button" id="duplicate-all-templates" class="button button-primary button-large">
                         <?php _e('🔄 Alle Templates duplizieren', 'wc-polylang-integration'); ?>
-                    </button>
-                    <button type="button" id="sync-template-content" class="button button-secondary button-large">
-                        <?php _e('🔗 Inhalte synchronisieren', 'wc-polylang-integration'); ?>
                     </button>
                     <button type="button" id="setup-conditions" class="button button-secondary button-large">
                         <?php _e('⚙️ Bedingungen einrichten', 'wc-polylang-integration'); ?>
@@ -148,6 +150,11 @@ class WC_Polylang_Elementor {
                         </tr>
                     </thead>
                     <tbody>
+                        <?php if (empty($templates)): ?>
+                        <tr>
+                            <td colspan="6"><?php _e('Keine WooCommerce Elementor Templates gefunden.', 'wc-polylang-integration'); ?></td>
+                        </tr>
+                        <?php else: ?>
                         <?php foreach ($templates as $template): ?>
                         <tr>
                             <td><strong><?php echo esc_html($template['title']); ?></strong></td>
@@ -162,7 +169,6 @@ class WC_Polylang_Elementor {
                                     <a href="<?php echo esc_url($template['de']['edit_url']); ?>" target="_blank">
                                         <?php _e('Bearbeiten', 'wc-polylang-integration'); ?>
                                     </a>
-                                    <br><small><?php echo esc_html($template['de']['conditions']); ?></small>
                                 <?php else: ?>
                                     <span class="dashicons dashicons-no-alt" style="color: red;"></span>
                                     <?php _e('Nicht gefunden', 'wc-polylang-integration'); ?>
@@ -174,7 +180,6 @@ class WC_Polylang_Elementor {
                                     <a href="<?php echo esc_url($template['en']['edit_url']); ?>" target="_blank">
                                         <?php _e('Bearbeiten', 'wc-polylang-integration'); ?>
                                     </a>
-                                    <br><small><?php echo esc_html($template['en']['conditions']); ?></small>
                                 <?php else: ?>
                                     <span class="dashicons dashicons-no-alt" style="color: red;"></span>
                                     <?php _e('Nicht erstellt', 'wc-polylang-integration'); ?>
@@ -195,39 +200,13 @@ class WC_Polylang_Elementor {
                                             data-template-id="<?php echo esc_attr($template['de']['id']); ?>">
                                         <?php _e('Duplizieren', 'wc-polylang-integration'); ?>
                                     </button>
-                                <?php elseif ($template['de'] && $template['en']): ?>
-                                    <button type="button" class="button button-small sync-single" 
-                                            data-de-id="<?php echo esc_attr($template['de']['id']); ?>"
-                                            data-en-id="<?php echo esc_attr($template['en']['id']); ?>">
-                                        <?php _e('Sync', 'wc-polylang-integration'); ?>
-                                    </button>
                                 <?php endif; ?>
                             </td>
                         </tr>
                         <?php endforeach; ?>
+                        <?php endif; ?>
                     </tbody>
                 </table>
-            </div>
-            
-            <!-- Template Guide -->
-            <div class="wc-polylang-template-guide">
-                <h2><?php _e('📖 Template-Anleitung', 'wc-polylang-integration'); ?></h2>
-                <div class="guide-content">
-                    <h3><?php _e('Automatische Template-Duplikation:', 'wc-polylang-integration'); ?></h3>
-                    <ol>
-                        <li><?php _e('Klicken Sie auf <strong>"Alle Templates duplizieren"</strong>', 'wc-polylang-integration'); ?></li>
-                        <li><?php _e('Das Plugin erstellt automatisch <strong>englische Versionen</strong> Ihrer deutschen Templates', 'wc-polylang-integration'); ?></li>
-                        <li><?php _e('<strong>Sprachbedingungen</strong> werden automatisch gesetzt', 'wc-polylang-integration'); ?></li>
-                        <li><?php _e('Templates sind sofort <strong>einsatzbereit</strong>', 'wc-polylang-integration'); ?></li>
-                    </ol>
-                    
-                    <h3><?php _e('Manuelle Anpassungen:', 'wc-polylang-integration'); ?></h3>
-                    <ul>
-                        <li><?php _e('Bearbeiten Sie die <strong>englischen Templates</strong> über die "Bearbeiten"-Links', 'wc-polylang-integration'); ?></li>
-                        <li><?php _e('Passen Sie <strong>Texte und Inhalte</strong> an die englische Sprache an', 'wc-polylang-integration'); ?></li>
-                        <li><?php _e('Die <strong>Template-Struktur</strong> bleibt erhalten', 'wc-polylang-integration'); ?></li>
-                    </ul>
-                </div>
             </div>
             
             <div id="template-progress" style="display: none; margin-top: 20px;">
@@ -305,19 +284,6 @@ class WC_Polylang_Elementor {
             color: #dc3232;
             font-weight: bold;
         }
-        .wc-polylang-template-guide {
-            background: #fff;
-            border: 1px solid #ccd0d4;
-            padding: 20px;
-            margin: 20px 0;
-        }
-        .guide-content ol, .guide-content ul {
-            padding-left: 20px;
-        }
-        .guide-content li {
-            margin-bottom: 8px;
-            line-height: 1.5;
-        }
         .progress-bar {
             width: 100%;
             height: 20px;
@@ -340,11 +306,6 @@ class WC_Polylang_Elementor {
                 performTemplateAction('duplicate_all', 'Alle Templates werden dupliziert...');
             });
             
-            // Sync content
-            $('#sync-template-content').on('click', function() {
-                performTemplateAction('sync_content', 'Template-Inhalte werden synchronisiert...');
-            });
-            
             // Setup conditions
             $('#setup-conditions').on('click', function() {
                 performTemplateAction('setup_conditions', 'Sprachbedingungen werden eingerichtet...');
@@ -354,12 +315,6 @@ class WC_Polylang_Elementor {
             $('.duplicate-single').on('click', function() {
                 var templateId = $(this).data('template-id');
                 performTemplateAction('duplicate_single', 'Template wird dupliziert...', {template_id: templateId});
-            });
-            
-            $('.sync-single').on('click', function() {
-                var deId = $(this).data('de-id');
-                var enId = $(this).data('en-id');
-                performTemplateAction('sync_single', 'Templates werden synchronisiert...', {de_id: deId, en_id: enId});
             });
             
             function performTemplateAction(action, progressText, extraData = {}) {
@@ -391,7 +346,11 @@ class WC_Polylang_Elementor {
                         
                         setTimeout(function() {
                             progress.hide();
-                            results.html(response.data.message).show();
+                            if (response.success) {
+                                results.html('<div class="notice notice-success"><p>' + response.data.message + '</p></div>').show();
+                            } else {
+                                results.html('<div class="notice notice-error"><p>Fehler: ' + response.data + '</p></div>').show();
+                            }
                             $('.button').prop('disabled', false);
                             
                             // Reload page after 3 seconds
@@ -446,13 +405,13 @@ class WC_Polylang_Elementor {
         
         foreach ($elementor_templates as $template) {
             $template_type = get_post_meta($template->ID, '_elementor_template_type', true);
-            $conditions = $this->get_template_conditions($template->ID);
             
             // Check if it's a WooCommerce related template
-            if ($this->is_woocommerce_template($template, $conditions)) {
+            if ($this->is_woocommerce_template($template)) {
                 $language = function_exists('pll_get_post_language') ? pll_get_post_language($template->ID) : 'de';
+                if (!$language) $language = 'de'; // Default to German
                 
-                $template_key = $this->get_template_key($template, $conditions);
+                $template_key = $this->get_template_key($template);
                 
                 if (!isset($templates[$template_key])) {
                     $templates[$template_key] = array(
@@ -466,8 +425,7 @@ class WC_Polylang_Elementor {
                 $templates[$template_key][$language] = array(
                     'id' => $template->ID,
                     'title' => $template->post_title,
-                    'edit_url' => admin_url('post.php?post=' . $template->ID . '&action=elementor'),
-                    'conditions' => $this->format_conditions($conditions)
+                    'edit_url' => admin_url('post.php?post=' . $template->ID . '&action=elementor')
                 );
             }
         }
@@ -476,31 +434,14 @@ class WC_Polylang_Elementor {
     }
     
     /**
-     * Get template conditions
-     */
-    private function get_template_conditions($template_id) {
-        $conditions = get_post_meta($template_id, '_elementor_conditions', true);
-        return is_array($conditions) ? $conditions : array();
-    }
-    
-    /**
      * Check if template is WooCommerce related
      */
-    private function is_woocommerce_template($template, $conditions) {
+    private function is_woocommerce_template($template) {
         $template_type = get_post_meta($template->ID, '_elementor_template_type', true);
         
         // Check template type
         if (in_array($template_type, array('product-archive', 'single-product'))) {
             return true;
-        }
-        
-        // Check conditions
-        foreach ($conditions as $condition) {
-            if (strpos($condition, 'product') !== false || 
-                strpos($condition, 'shop') !== false || 
-                strpos($condition, 'woocommerce') !== false) {
-                return true;
-            }
         }
         
         // Check template title
@@ -519,41 +460,9 @@ class WC_Polylang_Elementor {
     /**
      * Get template key for grouping
      */
-    private function get_template_key($template, $conditions) {
+    private function get_template_key($template) {
         $template_type = get_post_meta($template->ID, '_elementor_template_type', true);
-        $key = $template_type;
-        
-        // Add specific conditions to key
-        foreach ($conditions as $condition) {
-            if (strpos($condition, 'product_cat') !== false) {
-                $key .= '_category';
-                break;
-            } elseif (strpos($condition, 'product_tag') !== false) {
-                $key .= '_tag';
-                break;
-            } elseif (strpos($condition, 'shop') !== false) {
-                $key .= '_shop';
-                break;
-            }
-        }
-        
-        return $key . '_' . sanitize_title($template->post_title);
-    }
-    
-    /**
-     * Format conditions for display
-     */
-    private function format_conditions($conditions) {
-        if (empty($conditions)) {
-            return __('Keine Bedingungen', 'wc-polylang-integration');
-        }
-        
-        $formatted = array();
-        foreach ($conditions as $condition) {
-            $formatted[] = str_replace('_', ' ', $condition);
-        }
-        
-        return implode(', ', $formatted);
+        return $template_type . '_' . sanitize_title($template->post_title);
     }
     
     /**
@@ -571,15 +480,18 @@ class WC_Polylang_Elementor {
     }
     
     /**
-     * Handle template duplication and management
+     * Handle template duplication
      */
     public function duplicate_templates() {
+        // Verify nonce
         if (!wp_verify_nonce($_POST['nonce'], 'wc_polylang_elementor_templates')) {
-            wp_die('Security check failed');
+            wp_send_json_error('Security check failed');
+            return;
         }
         
         if (!current_user_can('manage_woocommerce')) {
-            wp_die('Insufficient permissions');
+            wp_send_json_error('Insufficient permissions');
+            return;
         }
         
         $action = sanitize_text_field($_POST['template_action']);
@@ -592,14 +504,6 @@ class WC_Polylang_Elementor {
             case 'duplicate_single':
                 $template_id = intval($_POST['template_id']);
                 $results = $this->duplicate_single_template($template_id);
-                break;
-            case 'sync_content':
-                $results = $this->sync_all_content();
-                break;
-            case 'sync_single':
-                $de_id = intval($_POST['de_id']);
-                $en_id = intval($_POST['en_id']);
-                $results = $this->sync_single_content($de_id, $en_id);
                 break;
             case 'setup_conditions':
                 $results = $this->setup_all_conditions();
@@ -633,59 +537,53 @@ class WC_Polylang_Elementor {
     private function duplicate_single_template($template_id) {
         $results = array();
         
-        try {
-            $original_template = get_post($template_id);
-            if (!$original_template) {
-                throw new Exception('Template not found');
+        $original_template = get_post($template_id);
+        if (!$original_template) {
+            $results[] = sprintf(__('✗ Template %d nicht gefunden', 'wc-polylang-integration'), $template_id);
+            return $results;
+        }
+        
+        // Create English version
+        $en_template_data = array(
+            'post_title' => $original_template->post_title . ' (EN)',
+            'post_content' => $original_template->post_content,
+            'post_status' => 'publish',
+            'post_type' => 'elementor_library',
+            'post_author' => $original_template->post_author
+        );
+        
+        $en_template_id = wp_insert_post($en_template_data);
+        
+        if ($en_template_id && !is_wp_error($en_template_id)) {
+            // Copy all meta data
+            $meta_data = get_post_meta($template_id);
+            foreach ($meta_data as $key => $values) {
+                foreach ($values as $value) {
+                    add_post_meta($en_template_id, $key, maybe_unserialize($value));
+                }
             }
             
-            // Create English version
-            $en_template_data = array(
-                'post_title' => $original_template->post_title . ' (EN)',
-                'post_content' => $original_template->post_content,
-                'post_status' => 'publish',
-                'post_type' => 'elementor_library',
-                'post_author' => $original_template->post_author
-            );
-            
-            $en_template_id = wp_insert_post($en_template_data);
-            
-            if ($en_template_id && !is_wp_error($en_template_id)) {
-                // Copy all meta data
-                $meta_data = get_post_meta($template_id);
-                foreach ($meta_data as $key => $values) {
-                    foreach ($values as $value) {
-                        add_post_meta($en_template_id, $key, maybe_unserialize($value));
-                    }
+            // Set languages if Polylang is available
+            if (function_exists('pll_set_post_language')) {
+                pll_set_post_language($template_id, 'de');
+                pll_set_post_language($en_template_id, 'en');
+                
+                // Link translations
+                if (function_exists('pll_save_post_translations')) {
+                    pll_save_post_translations(array(
+                        'de' => $template_id,
+                        'en' => $en_template_id
+                    ));
                 }
-                
-                // Set languages
-                if (function_exists('pll_set_post_language')) {
-                    pll_set_post_language($template_id, 'de');
-                    pll_set_post_language($en_template_id, 'en');
-                    
-                    // Link translations
-                    if (function_exists('pll_save_post_translations')) {
-                        pll_save_post_translations(array(
-                            'de' => $template_id,
-                            'en' => $en_template_id
-                        ));
-                    }
-                }
-                
-                // Update conditions for English template
-                $this->update_template_conditions($en_template_id, 'en');
-                
-                $results[] = sprintf(__('✓ Template "%s" erfolgreich dupliziert (ID: %d)', 'wc-polylang-integration'), 
-                    $original_template->post_title, $en_template_id);
-                
-            } else {
-                throw new Exception('Failed to create English template');
             }
             
-        } catch (Exception $e) {
-            $results[] = sprintf(__('✗ Fehler beim Duplizieren von Template %d: %s', 'wc-polylang-integration'), 
-                $template_id, $e->getMessage());
+            // Update conditions for English template
+            $this->update_template_conditions($en_template_id, 'en');
+            
+            $results[] = sprintf(__('✓ Template "%s" erfolgreich dupliziert (ID: %d)', 'wc-polylang-integration'), 
+                $original_template->post_title, $en_template_id);
+        } else {
+            $results[] = sprintf(__('✗ Fehler beim Duplizieren von Template %d', 'wc-polylang-integration'), $template_id);
         }
         
         return $results;
@@ -705,68 +603,6 @@ class WC_Polylang_Elementor {
         $conditions[] = 'polylang_language_' . $language;
         
         update_post_meta($template_id, '_elementor_conditions', $conditions);
-    }
-    
-    /**
-     * Sync all content
-     */
-    private function sync_all_content() {
-        $results = array();
-        $templates = $this->get_woocommerce_templates();
-        
-        foreach ($templates as $template_data) {
-            if ($template_data['de'] && $template_data['en']) {
-                $result = $this->sync_single_content($template_data['de']['id'], $template_data['en']['id']);
-                $results = array_merge($results, $result);
-            }
-        }
-        
-        return $results;
-    }
-    
-    /**
-     * Sync single content
-     */
-    private function sync_single_content($de_id, $en_id) {
-        $results = array();
-        
-        try {
-            $de_template = get_post($de_id);
-            $en_template = get_post($en_id);
-            
-            if (!$de_template || !$en_template) {
-                throw new Exception('Templates not found');
-            }
-            
-            // Update English template structure (keep content, update structure)
-            $elementor_data = get_post_meta($de_id, '_elementor_data', true);
-            if ($elementor_data) {
-                update_post_meta($en_id, '_elementor_data', $elementor_data);
-            }
-            
-            // Update other Elementor meta
-            $elementor_meta_keys = array(
-                '_elementor_version',
-                '_elementor_template_type',
-                '_elementor_edit_mode',
-                '_elementor_css'
-            );
-            
-            foreach ($elementor_meta_keys as $meta_key) {
-                $meta_value = get_post_meta($de_id, $meta_key, true);
-                if ($meta_value) {
-                    update_post_meta($en_id, $meta_key, $meta_value);
-                }
-            }
-            
-            $results[] = sprintf(__('✓ Template-Struktur synchronisiert: %s → %s', 'wc-polylang-integration'), 
-                $de_template->post_title, $en_template->post_title);
-                
-        } catch (Exception $e) {
-            $results[] = sprintf(__('✗ Fehler beim Synchronisieren: %s', 'wc-polylang-integration'), $e->getMessage());
-        }
-        
-        return $results;
     }
     
     /**
@@ -800,15 +636,12 @@ class WC_Polylang_Elementor {
         $action_labels = array(
             'duplicate_all' => __('Template-Duplikation', 'wc-polylang-integration'),
             'duplicate_single' => __('Einzelne Template-Duplikation', 'wc-polylang-integration'),
-            'sync_content' => __('Content-Synchronisation', 'wc-polylang-integration'),
-            'sync_single' => __('Einzelne Content-Synchronisation', 'wc-polylang-integration'),
             'setup_conditions' => __('Bedingungen-Setup', 'wc-polylang-integration')
         );
         
         $title = isset($action_labels[$action]) ? $action_labels[$action] : $action;
         
-        $message = '<div class="notice notice-success">';
-        $message .= '<h3>🎨 ' . $title . ' abgeschlossen!</h3>';
+        $message = '<h3>🎨 ' . $title . ' abgeschlossen!</h3>';
         
         if (!empty($results)) {
             $message .= '<ul><li>' . implode('</li><li>', $results) . '</li></ul>';
@@ -817,30 +650,8 @@ class WC_Polylang_Elementor {
         }
         
         $message .= '<p><strong>' . __('Die Seite wird in 3 Sekunden neu geladen...', 'wc-polylang-integration') . '</strong></p>';
-        $message .= '</div>';
         
         return $message;
-    }
-    
-    /**
-     * Handle template save
-     */
-    public function handle_template_save($template_id, $template_data) {
-        // Auto-sync when German template is saved
-        if (function_exists('pll_get_post_language')) {
-            $language = pll_get_post_language($template_id);
-            
-            if ($language === 'de') {
-                // Find English version and sync
-                if (function_exists('pll_get_post')) {
-                    $en_template_id = pll_get_post($template_id, 'en');
-                    if ($en_template_id) {
-                        // Schedule sync in background
-                        wp_schedule_single_event(time() + 10, 'wc_polylang_sync_template', array($template_id, $en_template_id));
-                    }
-                }
-            }
-        }
     }
     
     /**
@@ -867,30 +678,4 @@ class WC_Polylang_Elementor {
         
         return $filtered_templates;
     }
-    
-    /**
-     * Modify WooCommerce widgets
-     */
-    public function modify_woocommerce_widgets() {
-        // This will be extended to modify Elementor WooCommerce widgets for multilingual support
-        // For now, we ensure they work with the current language context
-        
-        if (function_exists('pll_current_language')) {
-            $current_language = pll_current_language();
-            
-            // Set language context for WooCommerce widgets
-            add_filter('woocommerce_widget_cart_is_hidden', function($is_hidden) use ($current_language) {
-                // Ensure cart widget works in all languages
-                return $is_hidden;
-            });
-        }
-    }
 }
-
-// Schedule template sync action
-add_action('wc_polylang_sync_template', function($de_id, $en_id) {
-    $elementor = WC_Polylang_Elementor::get_instance();
-    if ($elementor) {
-        $elementor->sync_single_content($de_id, $en_id);
-    }
-}, 10, 2);

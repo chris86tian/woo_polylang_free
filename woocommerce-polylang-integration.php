@@ -22,11 +22,6 @@ if (!defined('ABSPATH')) {
     exit;
 }
 
-// Enable error logging for debugging
-if (!defined('WP_DEBUG_LOG')) {
-    define('WP_DEBUG_LOG', true);
-}
-
 // Define plugin constants
 define('WC_POLYLANG_INTEGRATION_VERSION', '1.1.0');
 define('WC_POLYLANG_INTEGRATION_PLUGIN_FILE', __FILE__);
@@ -76,59 +71,32 @@ class WC_Polylang_Integration {
      * Constructor
      */
     private function __construct() {
-        wc_polylang_debug_log('Plugin constructor called');
-        
-        // Use try-catch to prevent fatal errors
-        try {
-            add_action('plugins_loaded', array($this, 'init'), 20); // Later priority to ensure dependencies are loaded
-            register_activation_hook(__FILE__, array($this, 'activate'));
-            register_deactivation_hook(__FILE__, array($this, 'deactivate'));
-        } catch (Exception $e) {
-            wc_polylang_debug_log('Error in constructor: ' . $e->getMessage());
-            add_action('admin_notices', array($this, 'show_error_notice'));
-        }
-    }
-    
-    /**
-     * Show error notice
-     */
-    public function show_error_notice() {
-        echo '<div class="notice notice-error"><p>';
-        echo __('WooCommerce Polylang Integration: Ein Fehler ist aufgetreten. Bitte prüfen Sie die Debug-Logs.', 'wc-polylang-integration');
-        echo '</p></div>';
+        // Hook into plugins_loaded with error handling
+        add_action('plugins_loaded', array($this, 'init'), 20);
+        register_activation_hook(__FILE__, array($this, 'activate'));
+        register_deactivation_hook(__FILE__, array($this, 'deactivate'));
     }
     
     /**
      * Initialize plugin
      */
     public function init() {
-        wc_polylang_debug_log('Plugin init called');
-        
-        try {
-            // Check dependencies first
-            if (!$this->check_dependencies()) {
-                wc_polylang_debug_log('Dependencies check failed');
-                return;
-            }
-            
-            // Load text domain
-            $this->load_textdomain();
-            
-            // Include required files
-            $this->includes();
-            
-            // Initialize components
-            $this->init_components();
-            
-            // Add hooks
-            $this->add_hooks();
-            
-            wc_polylang_debug_log('Plugin initialized successfully');
-            
-        } catch (Exception $e) {
-            wc_polylang_debug_log('Error in init: ' . $e->getMessage());
-            add_action('admin_notices', array($this, 'show_error_notice'));
+        // Check dependencies first
+        if (!$this->check_dependencies()) {
+            return;
         }
+        
+        // Load text domain
+        $this->load_textdomain();
+        
+        // Include required files
+        $this->includes();
+        
+        // Initialize components
+        $this->init_components();
+        
+        // Add hooks
+        $this->add_hooks();
     }
     
     /**
@@ -151,13 +119,11 @@ class WC_Polylang_Integration {
         // Check WooCommerce
         if (!class_exists('WooCommerce')) {
             $missing_plugins[] = 'WooCommerce';
-            wc_polylang_debug_log('WooCommerce not found');
         }
         
         // Check Polylang (check for both free and pro versions)
         if (!function_exists('pll_languages_list') && !class_exists('Polylang')) {
             $missing_plugins[] = 'Polylang';
-            wc_polylang_debug_log('Polylang not found');
         }
         
         if (!empty($missing_plugins)) {
@@ -172,7 +138,6 @@ class WC_Polylang_Integration {
             return false;
         }
         
-        wc_polylang_debug_log('All dependencies found');
         return true;
     }
     
@@ -180,8 +145,6 @@ class WC_Polylang_Integration {
      * Include required files
      */
     private function includes() {
-        wc_polylang_debug_log('Including files');
-        
         $files = array(
             'includes/functions.php',
             'includes/class-wc-polylang-admin.php',
@@ -199,16 +162,7 @@ class WC_Polylang_Integration {
             $file_path = WC_POLYLANG_INTEGRATION_PLUGIN_DIR . $file;
             
             if (file_exists($file_path)) {
-                try {
-                    require_once $file_path;
-                    wc_polylang_debug_log('Included file: ' . $file);
-                } catch (Exception $e) {
-                    wc_polylang_debug_log('Error including file ' . $file . ': ' . $e->getMessage());
-                    throw $e;
-                }
-            } else {
-                wc_polylang_debug_log('File not found: ' . $file_path);
-                throw new Exception('Required file not found: ' . $file);
+                require_once $file_path;
             }
         }
     }
@@ -217,38 +171,26 @@ class WC_Polylang_Integration {
      * Initialize components
      */
     private function init_components() {
-        wc_polylang_debug_log('Initializing components');
+        // Initialize admin
+        if (is_admin() && class_exists('WC_Polylang_Admin')) {
+            $this->components['admin'] = WC_Polylang_Admin::get_instance();
+        }
         
-        try {
-            // Initialize admin
-            if (is_admin() && class_exists('WC_Polylang_Admin')) {
-                $this->components['admin'] = WC_Polylang_Admin::get_instance();
-                wc_polylang_debug_log('Admin component initialized');
+        // Initialize frontend components
+        $frontend_components = array(
+            'products' => 'WC_Polylang_Products',
+            'widgets' => 'WC_Polylang_Widgets',
+            'emails' => 'WC_Polylang_Emails',
+            'seo' => 'WC_Polylang_SEO',
+            'custom_fields' => 'WC_Polylang_Custom_Fields',
+            'hooks' => 'WC_Polylang_Hooks',
+            'elementor' => 'WC_Polylang_Elementor'
+        );
+        
+        foreach ($frontend_components as $key => $class_name) {
+            if (class_exists($class_name)) {
+                $this->components[$key] = $class_name::get_instance();
             }
-            
-            // Initialize frontend components
-            $frontend_components = array(
-                'products' => 'WC_Polylang_Products',
-                'widgets' => 'WC_Polylang_Widgets',
-                'emails' => 'WC_Polylang_Emails',
-                'seo' => 'WC_Polylang_SEO',
-                'custom_fields' => 'WC_Polylang_Custom_Fields',
-                'hooks' => 'WC_Polylang_Hooks',
-                'elementor' => 'WC_Polylang_Elementor'
-            );
-            
-            foreach ($frontend_components as $key => $class_name) {
-                if (class_exists($class_name)) {
-                    $this->components[$key] = $class_name::get_instance();
-                    wc_polylang_debug_log('Component initialized: ' . $key);
-                } else {
-                    wc_polylang_debug_log('Component class not found: ' . $class_name);
-                }
-            }
-            
-        } catch (Exception $e) {
-            wc_polylang_debug_log('Error initializing components: ' . $e->getMessage());
-            throw $e;
         }
     }
     
@@ -256,24 +198,14 @@ class WC_Polylang_Integration {
      * Add plugin hooks
      */
     private function add_hooks() {
-        wc_polylang_debug_log('Adding hooks');
+        // Add settings link
+        add_filter('plugin_action_links_' . WC_POLYLANG_INTEGRATION_PLUGIN_BASENAME, array($this, 'add_settings_link'));
         
-        try {
-            // Add settings link
-            add_filter('plugin_action_links_' . WC_POLYLANG_INTEGRATION_PLUGIN_BASENAME, array($this, 'add_settings_link'));
-            
-            // HPOS compatibility
-            add_action('before_woocommerce_init', array($this, 'declare_hpos_compatibility'));
-            
-            // Elementor Pro compatibility
-            add_action('elementor/init', array($this, 'declare_elementor_compatibility'));
-            
-            wc_polylang_debug_log('Hooks added successfully');
-            
-        } catch (Exception $e) {
-            wc_polylang_debug_log('Error adding hooks: ' . $e->getMessage());
-            throw $e;
-        }
+        // HPOS compatibility
+        add_action('before_woocommerce_init', array($this, 'declare_hpos_compatibility'));
+        
+        // Elementor Pro compatibility
+        add_action('elementor/init', array($this, 'declare_elementor_compatibility'));
     }
     
     /**
@@ -298,49 +230,34 @@ class WC_Polylang_Integration {
      * Declare Elementor Pro compatibility
      */
     public function declare_elementor_compatibility() {
-        if (defined('ELEMENTOR_PRO_VERSION')) {
-            wc_polylang_debug_log('Elementor Pro detected, initializing compatibility');
-        }
+        // Elementor Pro compatibility will be handled by the Elementor component
     }
     
     /**
      * Plugin activation
      */
     public function activate() {
-        wc_polylang_debug_log('Plugin activation started');
-        
-        try {
-            // Check dependencies on activation
-            if (!$this->check_dependencies()) {
-                wc_polylang_debug_log('Activation failed: missing dependencies');
-                deactivate_plugins(plugin_basename(__FILE__));
-                wp_die(__('WooCommerce Polylang Integration kann nicht aktiviert werden. Bitte installieren Sie WooCommerce und Polylang.', 'wc-polylang-integration'));
-                return;
-            }
-            
-            // Create database tables if needed
-            $this->create_tables();
-            
-            // Set default options
-            $this->set_default_options();
-            
-            // Flush rewrite rules
-            flush_rewrite_rules();
-            
-            wc_polylang_debug_log('Plugin activated successfully');
-            
-        } catch (Exception $e) {
-            wc_polylang_debug_log('Error during activation: ' . $e->getMessage());
+        // Check dependencies on activation
+        if (!$this->check_dependencies()) {
             deactivate_plugins(plugin_basename(__FILE__));
-            wp_die('Aktivierungsfehler: ' . $e->getMessage());
+            wp_die(__('WooCommerce Polylang Integration kann nicht aktiviert werden. Bitte installieren Sie WooCommerce und Polylang.', 'wc-polylang-integration'));
+            return;
         }
+        
+        // Create database tables if needed
+        $this->create_tables();
+        
+        // Set default options
+        $this->set_default_options();
+        
+        // Flush rewrite rules
+        flush_rewrite_rules();
     }
     
     /**
      * Plugin deactivation
      */
     public function deactivate() {
-        wc_polylang_debug_log('Plugin deactivated');
         flush_rewrite_rules();
     }
     
@@ -350,37 +267,29 @@ class WC_Polylang_Integration {
     private function create_tables() {
         global $wpdb;
         
-        try {
-            $charset_collate = $wpdb->get_charset_collate();
-            
-            // Table for translation mappings
-            $table_name = $wpdb->prefix . 'wc_polylang_translations';
-            
-            $sql = "CREATE TABLE IF NOT EXISTS $table_name (
-                id bigint(20) NOT NULL AUTO_INCREMENT,
-                object_id bigint(20) NOT NULL,
-                object_type varchar(50) NOT NULL,
-                language varchar(10) NOT NULL,
-                translation_id bigint(20) NOT NULL,
-                created_at datetime DEFAULT CURRENT_TIMESTAMP,
-                updated_at datetime DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
-                PRIMARY KEY (id),
-                KEY object_id (object_id),
-                KEY object_type (object_type),
-                KEY language (language),
-                KEY translation_id (translation_id),
-                UNIQUE KEY unique_translation (object_id, object_type, language)
-            ) $charset_collate;";
-            
-            require_once(ABSPATH . 'wp-admin/includes/upgrade.php');
-            dbDelta($sql);
-            
-            wc_polylang_debug_log('Database tables created');
-            
-        } catch (Exception $e) {
-            wc_polylang_debug_log('Error creating tables: ' . $e->getMessage());
-            throw $e;
-        }
+        $charset_collate = $wpdb->get_charset_collate();
+        
+        // Table for translation mappings
+        $table_name = $wpdb->prefix . 'wc_polylang_translations';
+        
+        $sql = "CREATE TABLE IF NOT EXISTS $table_name (
+            id bigint(20) NOT NULL AUTO_INCREMENT,
+            object_id bigint(20) NOT NULL,
+            object_type varchar(50) NOT NULL,
+            language varchar(10) NOT NULL,
+            translation_id bigint(20) NOT NULL,
+            created_at datetime DEFAULT CURRENT_TIMESTAMP,
+            updated_at datetime DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+            PRIMARY KEY (id),
+            KEY object_id (object_id),
+            KEY object_type (object_type),
+            KEY language (language),
+            KEY translation_id (translation_id),
+            UNIQUE KEY unique_translation (object_id, object_type, language)
+        ) $charset_collate;";
+        
+        require_once(ABSPATH . 'wp-admin/includes/upgrade.php');
+        dbDelta($sql);
     }
     
     /**
@@ -404,8 +313,6 @@ class WC_Polylang_Integration {
                 update_option('wc_polylang_' . $option, $value);
             }
         }
-        
-        wc_polylang_debug_log('Default options set');
     }
     
     /**
@@ -417,24 +324,11 @@ class WC_Polylang_Integration {
 }
 
 /**
- * Initialize plugin with error handling
+ * Initialize plugin
  */
 function wc_polylang_integration() {
-    try {
-        return WC_Polylang_Integration::get_instance();
-    } catch (Exception $e) {
-        wc_polylang_debug_log('Fatal error initializing plugin: ' . $e->getMessage());
-        
-        // Show admin notice instead of fatal error
-        add_action('admin_notices', function() use ($e) {
-            echo '<div class="notice notice-error"><p>';
-            echo '<strong>WooCommerce Polylang Integration Fehler:</strong> ' . esc_html($e->getMessage());
-            echo '</p></div>';
-        });
-        
-        return null;
-    }
+    return WC_Polylang_Integration::get_instance();
 }
 
 // Start the plugin
-add_action('plugins_loaded', 'wc_polylang_integration', 5);
+wc_polylang_integration();
