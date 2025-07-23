@@ -1,6 +1,6 @@
 <?php
 /**
- * Shop page language configuration
+ * Shop page language configuration - BERECHTIGUNGEN KORRIGIERT
  */
 
 if (!defined('ABSPATH')) {
@@ -25,26 +25,54 @@ class WC_Polylang_Shop_Config {
         
         add_action('admin_menu', array($this, 'add_config_page'));
         add_action('wp_ajax_wc_polylang_setup_shop_pages', array($this, 'setup_shop_pages'));
+        
+        // Debug-Log für Berechtigungen
+        if (class_exists('WC_Polylang_Debug')) {
+            WC_Polylang_Debug::log("Shop Config Klasse initialisiert", 'INFO');
+        }
     }
     
     /**
-     * Add configuration page
+     * Add configuration page - BERECHTIGUNGEN KORRIGIERT
      */
     public function add_config_page() {
-        add_submenu_page(
+        // Debug aktuelle Benutzerrechte
+        if (class_exists('WC_Polylang_Debug')) {
+            $current_user = wp_get_current_user();
+            WC_Polylang_Debug::log("Aktueller Benutzer: " . $current_user->user_login, 'DEBUG');
+            WC_Polylang_Debug::log("Benutzer-Rollen: " . implode(', ', $current_user->roles), 'DEBUG');
+            WC_Polylang_Debug::log("manage_options: " . (current_user_can('manage_options') ? 'JA' : 'NEIN'), 'DEBUG');
+            WC_Polylang_Debug::log("manage_woocommerce: " . (current_user_can('manage_woocommerce') ? 'JA' : 'NEIN'), 'DEBUG');
+        }
+        
+        // KORRIGIERTE BERECHTIGUNG - verwende manage_options statt manage_woocommerce
+        $page_hook = add_submenu_page(
             'wc-polylang-integration',
             __('Shop-Seiten Konfiguration', 'wc-polylang-integration'),
             __('🛍️ Shop-Seiten', 'wc-polylang-integration'),
-            'manage_woocommerce',
+            'manage_options', // GEÄNDERT: manage_options statt manage_woocommerce
             'wc-polylang-shop-config',
             array($this, 'config_page')
         );
+        
+        if (class_exists('WC_Polylang_Debug')) {
+            WC_Polylang_Debug::log("Shop-Seiten Untermenü registriert mit Hook: " . $page_hook, 'SUCCESS');
+        }
     }
     
     /**
-     * Configuration page
+     * Configuration page - MIT BERECHTIGUNGSPRÜFUNG
      */
     public function config_page() {
+        // ZUSÄTZLICHE SICHERHEITSPRÜFUNG
+        if (!current_user_can('manage_options')) {
+            wp_die(__('Du hast nicht die erforderlichen Berechtigungen für diese Seite.', 'wc-polylang-integration'));
+        }
+        
+        if (class_exists('WC_Polylang_Debug')) {
+            WC_Polylang_Debug::log("Shop Config Seite wird geladen", 'INFO');
+        }
+        
         $languages = function_exists('pll_languages_list') ? pll_languages_list() : array();
         $shop_pages = $this->get_shop_pages_status();
         
@@ -53,7 +81,17 @@ class WC_Polylang_Shop_Config {
             <h1>🛍️ WooCommerce Shop-Seiten Konfiguration</h1>
             <p class="description">Entwickelt von <strong><a href="https://www.lipalife.de" target="_blank">LipaLIFE</a></strong> - Automatische mehrsprachige Shop-Seiten</p>
             
+            <!-- BERECHTIGUNGS-DEBUG INFO -->
             <div class="notice notice-info">
+                <p><strong>🔐 Berechtigungsstatus:</strong></p>
+                <ul>
+                    <li>✅ Zugriff erfolgreich - Sie haben die erforderlichen Berechtigungen</li>
+                    <li>👤 Aktueller Benutzer: <strong><?php echo wp_get_current_user()->user_login; ?></strong></li>
+                    <li>🎭 Rollen: <strong><?php echo implode(', ', wp_get_current_user()->roles); ?></strong></li>
+                </ul>
+            </div>
+            
+            <div class="notice notice-success">
                 <p><strong>📋 Anleitung:</strong> Hier können Sie die mehrsprachigen Shop-Seiten automatisch einrichten und konfigurieren.</p>
                 <p>Das System erkennt Ihre vorhandenen deutschen Seiten und erstellt automatisch die englischen Versionen.</p>
             </div>
@@ -129,6 +167,9 @@ class WC_Polylang_Shop_Config {
                     </button>
                     <button type="button" id="check-wc-settings" class="button button-secondary">
                         🔍 WooCommerce-Einstellungen prüfen
+                    </button>
+                    <button type="button" id="test-permissions" class="button button-secondary">
+                        🔐 Berechtigungen testen
                     </button>
                 </div>
                 
@@ -236,13 +277,41 @@ class WC_Polylang_Shop_Config {
                     </ul>
                 </div>
             </div>
+            
+            <!-- DEBUG INFORMATIONEN -->
+            <div class="wc-polylang-debug">
+                <h2>🔍 Debug-Informationen</h2>
+                <table class="form-table">
+                    <tr>
+                        <th>WordPress Version:</th>
+                        <td><?php echo get_bloginfo('version'); ?></td>
+                    </tr>
+                    <tr>
+                        <th>WooCommerce:</th>
+                        <td><?php echo class_exists('WooCommerce') ? '✅ Aktiv (Version: ' . WC()->version . ')' : '❌ Nicht aktiv'; ?></td>
+                    </tr>
+                    <tr>
+                        <th>Polylang:</th>
+                        <td><?php echo function_exists('pll_languages_list') ? '✅ Aktiv' : '❌ Nicht aktiv'; ?></td>
+                    </tr>
+                    <tr>
+                        <th>Verfügbare Sprachen:</th>
+                        <td><?php echo function_exists('pll_languages_list') ? implode(', ', pll_languages_list()) : 'Keine'; ?></td>
+                    </tr>
+                    <tr>
+                        <th>Plugin-Pfad:</th>
+                        <td><code><?php echo WC_POLYLANG_INTEGRATION_PLUGIN_DIR; ?></code></td>
+                    </tr>
+                </table>
+            </div>
         </div>
         
         <style>
         .wc-polylang-shop-status,
         .wc-polylang-actions,
         .wc-polylang-wc-settings,
-        .wc-polylang-manual {
+        .wc-polylang-manual,
+        .wc-polylang-debug {
             background: #fff;
             border: 1px solid #ccd0d4;
             padding: 20px;
@@ -333,19 +402,25 @@ class WC_Polylang_Shop_Config {
                         
                         setTimeout(function() {
                             progress.hide();
-                            results.html(response.data.message).show();
+                            if (response.success) {
+                                results.html(response.data.message).show();
+                            } else {
+                                results.html('<div class="notice notice-error"><p>Fehler: ' + response.data + '</p></div>').show();
+                            }
                             button.prop('disabled', false);
                             
-                            // Reload page after 3 seconds
-                            setTimeout(function() {
-                                location.reload();
-                            }, 3000);
+                            // Reload page after 3 seconds if successful
+                            if (response.success) {
+                                setTimeout(function() {
+                                    location.reload();
+                                }, 3000);
+                            }
                         }, 1000);
                     },
-                    error: function() {
+                    error: function(xhr, status, error) {
                         clearInterval(interval);
                         progress.hide();
-                        results.html('<div class="notice notice-error"><p>Fehler bei der Einrichtung. Bitte versuchen Sie es erneut oder wenden Sie sich an den Support.</p></div>').show();
+                        results.html('<div class="notice notice-error"><p>AJAX-Fehler: ' + error + '<br>Status: ' + status + '<br>Response: ' + xhr.responseText + '</p></div>').show();
                         button.prop('disabled', false);
                     }
                 });
@@ -353,6 +428,14 @@ class WC_Polylang_Shop_Config {
             
             $('#check-wc-settings').on('click', function() {
                 window.open('<?php echo admin_url('admin.php?page=wc-settings&tab=advanced&section=page_setup'); ?>', '_blank');
+            });
+            
+            $('#test-permissions').on('click', function() {
+                alert('Berechtigungstest:\n\n' +
+                      'Aktueller Benutzer: <?php echo wp_get_current_user()->user_login; ?>\n' +
+                      'Rollen: <?php echo implode(", ", wp_get_current_user()->roles); ?>\n' +
+                      'manage_options: <?php echo current_user_can("manage_options") ? "JA" : "NEIN"; ?>\n' +
+                      'manage_woocommerce: <?php echo current_user_can("manage_woocommerce") ? "JA" : "NEIN"; ?>');
             });
         });
         </script>
@@ -424,15 +507,22 @@ class WC_Polylang_Shop_Config {
     }
     
     /**
-     * Setup shop pages automatically
+     * Setup shop pages automatically - BERECHTIGUNGEN KORRIGIERT
      */
     public function setup_shop_pages() {
+        // KORRIGIERTE BERECHTIGUNG
         if (!wp_verify_nonce($_POST['nonce'], 'wc_polylang_setup_shop_pages')) {
-            wp_die('Security check failed');
+            wp_send_json_error('Security check failed');
+            return;
         }
         
-        if (!current_user_can('manage_woocommerce')) {
-            wp_die('Insufficient permissions');
+        if (!current_user_can('manage_options')) { // GEÄNDERT: manage_options statt manage_woocommerce
+            wp_send_json_error('Insufficient permissions - Sie benötigen Administrator-Rechte');
+            return;
+        }
+        
+        if (class_exists('WC_Polylang_Debug')) {
+            WC_Polylang_Debug::log("Shop-Seiten Setup gestartet", 'INFO');
         }
         
         $results = array();
@@ -563,6 +653,10 @@ class WC_Polylang_Shop_Config {
         
         $message .= '<p><strong>Die Seite wird in 3 Sekunden neu geladen...</strong></p>';
         $message .= '</div>';
+        
+        if (class_exists('WC_Polylang_Debug')) {
+            WC_Polylang_Debug::log("Shop-Seiten Setup erfolgreich abgeschlossen", 'SUCCESS');
+        }
         
         wp_send_json_success(array('message' => $message));
     }
