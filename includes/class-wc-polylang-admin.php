@@ -1,6 +1,6 @@
 <?php
 /**
- * Admin functionality - MIT SHOP-SEITEN INTEGRATION
+ * Admin functionality - MIT SHOP-SEITEN INTEGRATION UND BERECHTIGUNGSFIX
  */
 
 if (!defined('ABSPATH')) {
@@ -39,7 +39,7 @@ class WC_Polylang_Admin {
         
         try {
             wc_polylang_admin_debug_log("Registriere Admin-Hooks...");
-            add_action('admin_menu', array($this, 'add_admin_menu'));
+            add_action('admin_menu', array($this, 'add_admin_menu'), 10); // Frühere Priorität
             add_action('admin_init', array($this, 'init_settings'));
             add_action('admin_enqueue_scripts', array($this, 'enqueue_admin_scripts'));
             
@@ -51,12 +51,12 @@ class WC_Polylang_Admin {
     }
     
     /**
-     * Add admin menu - HAUPTMENÜ + UNTERMENÜS
+     * Add admin menu - HAUPTMENÜ + UNTERMENÜS - BERECHTIGUNGSFIX
      */
     public function add_admin_menu() {
         wc_polylang_admin_debug_log("add_admin_menu() aufgerufen - registriere Hauptmenü und Untermenüs");
         
-        // Hauptmenü
+        // HAUPTMENÜ ZUERST - Das war das Problem!
         add_submenu_page(
             'woocommerce',
             __('Polylang Integration', 'wc-polylang-integration'),
@@ -68,10 +68,49 @@ class WC_Polylang_Admin {
         
         wc_polylang_admin_debug_log("Hauptmenü erfolgreich registriert");
         
-        // Lade Shop Config Klasse für Untermenü
-        if (!class_exists('WC_Polylang_Shop_Config')) {
-            require_once WC_POLYLANG_INTEGRATION_PLUGIN_DIR . 'includes/class-wc-polylang-shop-config.php';
-        }
+        // JETZT können wir Untermenüs hinzufügen
+        $this->add_submenus();
+        
+        wc_polylang_admin_debug_log("Alle Menüs erfolgreich registriert");
+    }
+    
+    /**
+     * Füge alle Untermenüs hinzu - NACH dem Hauptmenü
+     */
+    private function add_submenus() {
+        wc_polylang_admin_debug_log("add_submenus() aufgerufen");
+        
+        // Shop-Seiten Konfiguration
+        add_submenu_page(
+            'wc-polylang-integration',
+            __('Shop-Seiten', 'wc-polylang-integration'),
+            __('🛍️ Shop-Seiten', 'wc-polylang-integration'),
+            'manage_options',
+            'wc-polylang-shop-config',
+            array($this, 'shop_config_page')
+        );
+        
+        // Bilinguale Kategorien - JETZT mit korrektem Parent!
+        add_submenu_page(
+            'wc-polylang-integration',
+            __('Bilinguale Kategorien', 'wc-polylang-integration'),
+            __('🌐 Bilinguale Kategorien', 'wc-polylang-integration'),
+            'manage_options',
+            'wc-polylang-bilingual-categories',
+            array($this, 'bilingual_categories_page')
+        );
+        
+        // Kategorien-Management
+        add_submenu_page(
+            'wc-polylang-integration',
+            __('Kategorien verwalten', 'wc-polylang-integration'),
+            __('📁 Kategorien', 'wc-polylang-integration'),
+            'manage_options',
+            'wc-polylang-categories',
+            array($this, 'categories_page')
+        );
+        
+        wc_polylang_admin_debug_log("Alle Untermenüs erfolgreich registriert");
     }
     
     /**
@@ -137,6 +176,13 @@ class WC_Polylang_Admin {
                         <p>Konfigurieren Sie mehrsprachige WooCommerce-Seiten (Shop, Checkout, My Account)</p>
                         <a href="<?php echo admin_url('admin.php?page=wc-polylang-shop-config'); ?>" class="button button-primary">
                             Shop-Seiten konfigurieren
+                        </a>
+                    </div>
+                    <div class="nav-card">
+                        <h3>🌐 Bilinguale Kategorien</h3>
+                        <p>Zeigen Sie Kategorien in beiden Sprachen gleichzeitig an (Deutsch | English)</p>
+                        <a href="<?php echo admin_url('admin.php?page=wc-polylang-bilingual-categories'); ?>" class="button button-primary">
+                            Bilinguale Kategorien
                         </a>
                     </div>
                     <div class="nav-card">
@@ -383,6 +429,57 @@ class WC_Polylang_Admin {
         }
         </script>
         <?php
+    }
+    
+    /**
+     * Shop Config Page - NEUE METHODE
+     */
+    public function shop_config_page() {
+        // Lade Shop Config Klasse falls nicht vorhanden
+        if (!class_exists('WC_Polylang_Shop_Config')) {
+            require_once WC_POLYLANG_INTEGRATION_PLUGIN_DIR . 'includes/class-wc-polylang-shop-config.php';
+        }
+        
+        if (class_exists('WC_Polylang_Shop_Config')) {
+            $shop_config = WC_Polylang_Shop_Config::get_instance();
+            $shop_config->admin_page();
+        } else {
+            echo '<div class="wrap"><h1>Shop-Seiten Konfiguration</h1><p>Klasse nicht gefunden.</p></div>';
+        }
+    }
+    
+    /**
+     * Bilingual Categories Page - NEUE METHODE
+     */
+    public function bilingual_categories_page() {
+        // Lade Bilingual Categories Klasse falls nicht vorhanden
+        if (!class_exists('WC_Polylang_Bilingual_Categories')) {
+            require_once WC_POLYLANG_INTEGRATION_PLUGIN_DIR . 'includes/class-wc-polylang-bilingual-categories.php';
+        }
+        
+        if (class_exists('WC_Polylang_Bilingual_Categories')) {
+            $bilingual_categories = WC_Polylang_Bilingual_Categories::get_instance();
+            $bilingual_categories->admin_page();
+        } else {
+            echo '<div class="wrap"><h1>Bilinguale Kategorien</h1><p>Klasse nicht gefunden.</p></div>';
+        }
+    }
+    
+    /**
+     * Categories Page - NEUE METHODE
+     */
+    public function categories_page() {
+        // Lade Categories Klasse falls nicht vorhanden
+        if (!class_exists('WC_Polylang_Categories')) {
+            require_once WC_POLYLANG_INTEGRATION_PLUGIN_DIR . 'includes/class-wc-polylang-categories.php';
+        }
+        
+        if (class_exists('WC_Polylang_Categories')) {
+            $categories = WC_Polylang_Categories::get_instance();
+            $categories->admin_page();
+        } else {
+            echo '<div class="wrap"><h1>Kategorien verwalten</h1><p>Klasse nicht gefunden.</p></div>';
+        }
     }
     
     /**

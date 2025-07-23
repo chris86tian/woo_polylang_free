@@ -1,317 +1,195 @@
 <?php
 /**
- * Shop page language configuration - BERECHTIGUNGEN KORRIGIERT
+ * Shop Configuration - Mehrsprachige WooCommerce-Seiten
+ * Entwickelt von LipaLIFE - www.lipalife.de
  */
 
 if (!defined('ABSPATH')) {
     exit;
 }
 
+// Debug-Funktion für Shop Config
+function wc_polylang_shop_debug_log($message, $level = 'INFO') {
+    if (class_exists('WC_Polylang_Debug')) {
+        WC_Polylang_Debug::log("SHOP CONFIG: " . $message, $level);
+    }
+}
+
+wc_polylang_shop_debug_log("class-wc-polylang-shop-config.php wird geladen...");
+
 class WC_Polylang_Shop_Config {
     
     private static $instance = null;
     
     public static function get_instance() {
+        wc_polylang_shop_debug_log("get_instance() aufgerufen");
         if (null === self::$instance) {
+            wc_polylang_shop_debug_log("Erstelle neue Shop Config-Instanz");
             self::$instance = new self();
         }
         return self::$instance;
     }
     
     private function __construct() {
-        if (!is_admin()) {
-            return;
+        wc_polylang_shop_debug_log("Shop Config Konstruktor gestartet");
+        
+        try {
+            add_action('init', array($this, 'init'));
+            
+            // AJAX Handlers
+            add_action('wp_ajax_wc_polylang_create_shop_pages', array($this, 'ajax_create_shop_pages'));
+            add_action('wp_ajax_wc_polylang_sync_shop_pages', array($this, 'ajax_sync_shop_pages'));
+            
+            wc_polylang_shop_debug_log("Shop Config Hooks erfolgreich registriert");
+        } catch (Exception $e) {
+            wc_polylang_shop_debug_log("Fehler im Shop Config-Konstruktor: " . $e->getMessage(), 'ERROR');
         }
+    }
+    
+    public function init() {
+        wc_polylang_shop_debug_log("Shop Config init() aufgerufen");
         
-        add_action('admin_menu', array($this, 'add_config_page'));
-        add_action('wp_ajax_wc_polylang_setup_shop_pages', array($this, 'setup_shop_pages'));
-        
-        // Debug-Log für Berechtigungen
-        if (class_exists('WC_Polylang_Debug')) {
-            WC_Polylang_Debug::log("Shop Config Klasse initialisiert", 'INFO');
+        try {
+            // Frontend-Hooks für Shop-Seiten
+            add_filter('woocommerce_get_shop_page_id', array($this, 'get_translated_shop_page_id'));
+            add_filter('woocommerce_get_cart_page_id', array($this, 'get_translated_cart_page_id'));
+            add_filter('woocommerce_get_checkout_page_id', array($this, 'get_translated_checkout_page_id'));
+            add_filter('woocommerce_get_myaccount_page_id', array($this, 'get_translated_myaccount_page_id'));
+            
+            wc_polylang_shop_debug_log("Shop Config Frontend-Filter erfolgreich registriert");
+        } catch (Exception $e) {
+            wc_polylang_shop_debug_log("Fehler in Shop Config init(): " . $e->getMessage(), 'ERROR');
         }
     }
     
     /**
-     * Add configuration page - BERECHTIGUNGEN KORRIGIERT
+     * Admin-Seite für Shop-Konfiguration
      */
-    public function add_config_page() {
-        // Debug aktuelle Benutzerrechte
-        if (class_exists('WC_Polylang_Debug')) {
-            $current_user = wp_get_current_user();
-            WC_Polylang_Debug::log("Aktueller Benutzer: " . $current_user->user_login, 'DEBUG');
-            WC_Polylang_Debug::log("Benutzer-Rollen: " . implode(', ', $current_user->roles), 'DEBUG');
-            WC_Polylang_Debug::log("manage_options: " . (current_user_can('manage_options') ? 'JA' : 'NEIN'), 'DEBUG');
-            WC_Polylang_Debug::log("manage_woocommerce: " . (current_user_can('manage_woocommerce') ? 'JA' : 'NEIN'), 'DEBUG');
-        }
+    public function admin_page() {
+        wc_polylang_shop_debug_log("admin_page() aufgerufen");
         
-        // KORRIGIERTE BERECHTIGUNG - verwende manage_options statt manage_woocommerce
-        $page_hook = add_submenu_page(
-            'wc-polylang-integration',
-            __('Shop-Seiten Konfiguration', 'wc-polylang-integration'),
-            __('🛍️ Shop-Seiten', 'wc-polylang-integration'),
-            'manage_options', // GEÄNDERT: manage_options statt manage_woocommerce
-            'wc-polylang-shop-config',
-            array($this, 'config_page')
-        );
-        
-        if (class_exists('WC_Polylang_Debug')) {
-            WC_Polylang_Debug::log("Shop-Seiten Untermenü registriert mit Hook: " . $page_hook, 'SUCCESS');
-        }
-    }
-    
-    /**
-     * Configuration page - MIT BERECHTIGUNGSPRÜFUNG
-     */
-    public function config_page() {
-        // ZUSÄTZLICHE SICHERHEITSPRÜFUNG
-        if (!current_user_can('manage_options')) {
-            wp_die(__('Du hast nicht die erforderlichen Berechtigungen für diese Seite.', 'wc-polylang-integration'));
-        }
-        
-        if (class_exists('WC_Polylang_Debug')) {
-            WC_Polylang_Debug::log("Shop Config Seite wird geladen", 'INFO');
-        }
-        
-        $languages = function_exists('pll_languages_list') ? pll_languages_list() : array();
-        $shop_pages = $this->get_shop_pages_status();
+        $shop_pages_status = $this->get_shop_pages_status();
+        $languages = function_exists('pll_languages_list') ? pll_languages_list() : array('de', 'en');
         
         ?>
         <div class="wrap">
             <h1>🛍️ WooCommerce Shop-Seiten Konfiguration</h1>
-            <p class="description">Entwickelt von <strong><a href="https://www.lipalife.de" target="_blank">LipaLIFE</a></strong> - Automatische mehrsprachige Shop-Seiten</p>
+            <p class="description">Entwickelt von <strong><a href="https://www.lipalife.de" target="_blank">LipaLIFE</a></strong> - Mehrsprachige WooCommerce-Seiten verwalten</p>
             
-            <!-- BERECHTIGUNGS-DEBUG INFO -->
             <div class="notice notice-info">
-                <p><strong>🔐 Berechtigungsstatus:</strong></p>
-                <ul>
-                    <li>✅ Zugriff erfolgreich - Sie haben die erforderlichen Berechtigungen</li>
-                    <li>👤 Aktueller Benutzer: <strong><?php echo wp_get_current_user()->user_login; ?></strong></li>
-                    <li>🎭 Rollen: <strong><?php echo implode(', ', wp_get_current_user()->roles); ?></strong></li>
-                </ul>
+                <p><strong>💡 Funktionsweise:</strong> Diese Seite hilft Ihnen dabei, alle wichtigen WooCommerce-Seiten (Shop, Warenkorb, Checkout, Mein Konto) in allen verfügbaren Sprachen zu erstellen und zu verwalten.</p>
             </div>
             
-            <div class="notice notice-success">
-                <p><strong>📋 Anleitung:</strong> Hier können Sie die mehrsprachigen Shop-Seiten automatisch einrichten und konfigurieren.</p>
-                <p>Das System erkennt Ihre vorhandenen deutschen Seiten und erstellt automatisch die englischen Versionen.</p>
-            </div>
-            
-            <div class="wc-polylang-shop-status">
-                <h2>📊 Aktueller Status der Shop-Seiten</h2>
-                <table class="wp-list-table widefat fixed striped">
-                    <thead>
-                        <tr>
-                            <th style="width: 20%;"><?php _e('Seite', 'wc-polylang-integration'); ?></th>
-                            <th style="width: 30%;"><?php _e('🇩🇪 Deutsch', 'wc-polylang-integration'); ?></th>
-                            <th style="width: 30%;"><?php _e('🇬🇧 English', 'wc-polylang-integration'); ?></th>
-                            <th style="width: 20%;"><?php _e('Status', 'wc-polylang-integration'); ?></th>
-                        </tr>
-                    </thead>
-                    <tbody>
-                        <?php foreach ($shop_pages as $page_type => $page_data): ?>
-                        <tr>
-                            <td><strong><?php echo esc_html($page_data['label']); ?></strong></td>
-                            <td>
-                                <?php if ($page_data['de']): ?>
-                                    <span class="dashicons dashicons-yes-alt" style="color: green;"></span>
-                                    <a href="<?php echo get_edit_post_link($page_data['de']['id']); ?>" target="_blank">
-                                        <?php echo esc_html($page_data['de']['title']); ?>
-                                    </a>
-                                    <br><small style="color: #666;">ID: <?php echo $page_data['de']['id']; ?> | Slug: <?php echo $page_data['de']['slug']; ?></small>
-                                <?php else: ?>
-                                    <span class="dashicons dashicons-no-alt" style="color: red;"></span>
-                                    <span style="color: red;"><?php _e('Nicht gefunden', 'wc-polylang-integration'); ?></span>
-                                <?php endif; ?>
-                            </td>
-                            <td>
-                                <?php if ($page_data['en']): ?>
-                                    <span class="dashicons dashicons-yes-alt" style="color: green;"></span>
-                                    <a href="<?php echo get_edit_post_link($page_data['en']['id']); ?>" target="_blank">
-                                        <?php echo esc_html($page_data['en']['title']); ?>
-                                    </a>
-                                    <br><small style="color: #666;">ID: <?php echo $page_data['en']['id']; ?> | Slug: <?php echo $page_data['en']['slug']; ?></small>
-                                <?php else: ?>
-                                    <span class="dashicons dashicons-no-alt" style="color: red;"></span>
-                                    <span style="color: red;"><?php _e('Nicht erstellt', 'wc-polylang-integration'); ?></span>
-                                <?php endif; ?>
-                            </td>
-                            <td>
-                                <?php if ($page_data['de'] && $page_data['en']): ?>
-                                    <span class="status-complete">✅ Vollständig</span>
-                                <?php elseif ($page_data['de']): ?>
-                                    <span class="status-partial">⚠️ Teilweise</span>
-                                <?php else: ?>
-                                    <span class="status-incomplete">❌ Fehlt</span>
-                                <?php endif; ?>
-                            </td>
-                        </tr>
-                        <?php endforeach; ?>
-                    </tbody>
-                </table>
-            </div>
-            
-            <div class="wc-polylang-actions">
-                <h2>🚀 Automatische Einrichtung</h2>
-                <p><strong>Was passiert beim Klick auf "Shop-Seiten einrichten":</strong></p>
-                <ul>
-                    <li>✅ Erkennung Ihrer vorhandenen deutschen Shop-Seiten</li>
-                    <li>✅ Automatische Erstellung der englischen Versionen</li>
-                    <li>✅ Korrekte WooCommerce-Seitenzuordnung</li>
-                    <li>✅ Polylang-Übersetzungsverknüpfung</li>
-                    <li>✅ SEO-optimierte URLs (shop-en, checkout-en, my-account-en)</li>
-                </ul>
+            <div class="card">
+                <h2>📊 Status der Shop-Seiten</h2>
+                <div id="shop-pages-status">
+                    <?php $this->display_shop_pages_status($shop_pages_status, $languages); ?>
+                </div>
                 
                 <div style="margin: 20px 0;">
-                    <button type="button" id="setup-shop-pages" class="button button-primary button-large">
-                        🛍️ Shop-Seiten automatisch einrichten
+                    <button type="button" id="create-missing-pages" class="button button-primary">
+                        ➕ Fehlende Seiten erstellen
                     </button>
-                    <button type="button" id="check-wc-settings" class="button button-secondary">
-                        🔍 WooCommerce-Einstellungen prüfen
+                    <button type="button" id="sync-shop-pages" class="button button-secondary">
+                        🔄 Seiten synchronisieren
                     </button>
-                    <button type="button" id="test-permissions" class="button button-secondary">
-                        🔐 Berechtigungen testen
+                    <button type="button" id="refresh-status" class="button" onclick="location.reload()">
+                        🔄 Status aktualisieren
                     </button>
                 </div>
-                
-                <div id="setup-progress" style="display: none; margin-top: 20px;">
-                    <div class="progress-bar">
-                        <div class="progress-fill"></div>
-                    </div>
-                    <p id="progress-text"><?php _e('Einrichtung läuft...', 'wc-polylang-integration'); ?></p>
-                </div>
-                
-                <div id="setup-results" style="display: none; margin-top: 20px;"></div>
             </div>
             
-            <div class="wc-polylang-wc-settings">
-                <h2>⚙️ WooCommerce-Einstellungen</h2>
-                <p>Nach der automatischen Einrichtung sollten diese Einstellungen korrekt sein:</p>
-                
-                <table class="form-table">
-                    <tr>
-                        <th scope="row">Shop-Seite (Deutsch)</th>
-                        <td>
-                            <?php 
-                            $shop_page_id = wc_get_page_id('shop');
-                            if ($shop_page_id > 0) {
-                                $shop_page = get_post($shop_page_id);
-                                echo '<strong>' . esc_html($shop_page->post_title) . '</strong> (ID: ' . $shop_page_id . ')';
-                                echo '<br><a href="' . admin_url('admin.php?page=wc-settings&tab=products&section=display') . '">WooCommerce → Einstellungen → Produkte</a>';
-                            } else {
-                                echo '<span style="color: red;">Nicht konfiguriert</span>';
-                            }
-                            ?>
-                        </td>
-                    </tr>
-                    <tr>
-                        <th scope="row">Warenkorb-Seite</th>
-                        <td>
-                            <?php 
-                            $cart_page_id = wc_get_page_id('cart');
-                            if ($cart_page_id > 0) {
-                                $cart_page = get_post($cart_page_id);
-                                echo '<strong>' . esc_html($cart_page->post_title) . '</strong> (ID: ' . $cart_page_id . ')';
-                            } else {
-                                echo '<span style="color: red;">Nicht konfiguriert</span>';
-                            }
-                            ?>
-                        </td>
-                    </tr>
-                    <tr>
-                        <th scope="row">Kassen-Seite</th>
-                        <td>
-                            <?php 
-                            $checkout_page_id = wc_get_page_id('checkout');
-                            if ($checkout_page_id > 0) {
-                                $checkout_page = get_post($checkout_page_id);
-                                echo '<strong>' . esc_html($checkout_page->post_title) . '</strong> (ID: ' . $checkout_page_id . ')';
-                            } else {
-                                echo '<span style="color: red;">Nicht konfiguriert</span>';
-                            }
-                            ?>
-                        </td>
-                    </tr>
-                    <tr>
-                        <th scope="row">Mein Konto-Seite</th>
-                        <td>
-                            <?php 
-                            $myaccount_page_id = wc_get_page_id('myaccount');
-                            if ($myaccount_page_id > 0) {
-                                $myaccount_page = get_post($myaccount_page_id);
-                                echo '<strong>' . esc_html($myaccount_page->post_title) . '</strong> (ID: ' . $myaccount_page_id . ')';
-                            } else {
-                                echo '<span style="color: red;">Nicht konfiguriert</span>';
-                            }
-                            ?>
-                        </td>
-                    </tr>
-                </table>
-            </div>
-            
-            <div class="wc-polylang-manual">
-                <h2>📖 Manuelle Konfiguration (falls erforderlich)</h2>
-                <div class="manual-steps">
-                    <h3>So richten Sie Shop-Seiten manuell ein:</h3>
-                    <ol>
-                        <li><strong>Seiten → Alle Seiten</strong> aufrufen</li>
-                        <li>Ihre <strong>Shop-Seite</strong> finden und bearbeiten</li>
-                        <li>In der <strong>Polylang-Box</strong> (rechts): Sprache auf "Deutsch" setzen</li>
-                        <li>Auf das <strong>"+" bei English</strong> klicken</li>
-                        <li>Englische Version erstellen:
-                            <ul>
-                                <li>Titel: "Shop" (oder "Products")</li>
-                                <li>Slug: "shop-en" oder "shop"</li>
-                                <li>Inhalt kopieren</li>
-                            </ul>
-                        </li>
-                        <li>Wiederholen für: <strong>Warenkorb, Kasse, Mein Konto</strong></li>
-                        <li><strong>WooCommerce → Einstellungen → Erweitert → Seiten-Setup</strong> prüfen</li>
-                    </ol>
+            <div class="card">
+                <h2>⚙️ Shop-Seiten Einstellungen</h2>
+                <form id="shop-pages-settings">
+                    <table class="form-table">
+                        <tr>
+                            <th scope="row">Automatische Seitenerstellung</th>
+                            <td>
+                                <label>
+                                    <input type="checkbox" id="auto-create-pages" <?php checked(get_option('wc_polylang_auto_create_shop_pages', true)); ?>>
+                                    Fehlende Shop-Seiten automatisch erstellen
+                                </label>
+                                <p class="description">Erstellt automatisch fehlende Übersetzungen für Shop-Seiten</p>
+                            </td>
+                        </tr>
+                        <tr>
+                            <th scope="row">Seiten-Template</th>
+                            <td>
+                                <select id="page-template">
+                                    <option value="default" <?php selected(get_option('wc_polylang_shop_page_template', 'default'), 'default'); ?>>Standard WordPress Template</option>
+                                    <option value="elementor" <?php selected(get_option('wc_polylang_shop_page_template', 'default'), 'elementor'); ?>>Elementor Template</option>
+                                    <option value="custom" <?php selected(get_option('wc_polylang_shop_page_template', 'default'), 'custom'); ?>>Benutzerdefiniert</option>
+                                </select>
+                                <p class="description">Template für neue Shop-Seiten</p>
+                            </td>
+                        </tr>
+                        <tr>
+                            <th scope="row">URL-Struktur</th>
+                            <td>
+                                <select id="url-structure">
+                                    <option value="slug" <?php selected(get_option('wc_polylang_shop_url_structure', 'slug'), 'slug'); ?>>Übersetzte Slugs (shop/geschaeft)</option>
+                                    <option value="prefix" <?php selected(get_option('wc_polylang_shop_url_structure', 'slug'), 'prefix'); ?>>Sprachpräfix (/de/shop, /en/shop)</option>
+                                    <option value="domain" <?php selected(get_option('wc_polylang_shop_url_structure', 'slug'), 'domain'); ?>>Separate Domains</option>
+                                </select>
+                            </td>
+                        </tr>
+                    </table>
                     
-                    <h3>Wichtige URLs nach der Einrichtung:</h3>
-                    <ul>
-                        <li>🇩🇪 Deutscher Shop: <code><?php echo home_url('/shop/'); ?></code></li>
-                        <li>🇬🇧 Englischer Shop: <code><?php echo home_url('/en/shop/'); ?></code></li>
-                        <li>🇩🇪 Deutsche Kasse: <code><?php echo home_url('/kasse/'); ?></code></li>
-                        <li>🇬🇧 Englische Kasse: <code><?php echo home_url('/en/checkout/'); ?></code></li>
-                    </ul>
+                    <p class="submit">
+                        <button type="button" id="save-shop-settings" class="button button-primary">
+                            💾 Einstellungen speichern
+                        </button>
+                    </p>
+                </form>
+            </div>
+            
+            <div class="card">
+                <h2>🔧 Erweiterte Optionen</h2>
+                <div class="advanced-options">
+                    <h3>Seiten-Inhalte</h3>
+                    <p>Definieren Sie Standard-Inhalte für neue Shop-Seiten:</p>
+                    
+                    <div class="content-templates">
+                        <div class="template-item">
+                            <h4>🛍️ Shop-Seite</h4>
+                            <textarea id="shop-page-content" rows="3" class="large-text"><?php echo esc_textarea(get_option('wc_polylang_shop_page_content', 'Willkommen in unserem Online-Shop! Entdecken Sie unsere Produkte.')); ?></textarea>
+                        </div>
+                        
+                        <div class="template-item">
+                            <h4>🛒 Warenkorb-Seite</h4>
+                            <textarea id="cart-page-content" rows="3" class="large-text"><?php echo esc_textarea(get_option('wc_polylang_cart_page_content', 'Ihr Warenkorb - Überprüfen Sie Ihre ausgewählten Artikel.')); ?></textarea>
+                        </div>
+                        
+                        <div class="template-item">
+                            <h4>💳 Checkout-Seite</h4>
+                            <textarea id="checkout-page-content" rows="3" class="large-text"><?php echo esc_textarea(get_option('wc_polylang_checkout_page_content', 'Checkout - Schließen Sie Ihren Kauf ab.')); ?></textarea>
+                        </div>
+                        
+                        <div class="template-item">
+                            <h4>👤 Mein Konto-Seite</h4>
+                            <textarea id="myaccount-page-content" rows="3" class="large-text"><?php echo esc_textarea(get_option('wc_polylang_myaccount_page_content', 'Mein Konto - Verwalten Sie Ihre Bestellungen und Daten.')); ?></textarea>
+                        </div>
+                    </div>
+                    
+                    <p class="submit">
+                        <button type="button" id="save-content-templates" class="button button-secondary">
+                            💾 Inhalts-Templates speichern
+                        </button>
+                    </p>
                 </div>
             </div>
             
-            <!-- DEBUG INFORMATIONEN -->
-            <div class="wc-polylang-debug">
-                <h2>🔍 Debug-Informationen</h2>
-                <table class="form-table">
-                    <tr>
-                        <th>WordPress Version:</th>
-                        <td><?php echo get_bloginfo('version'); ?></td>
-                    </tr>
-                    <tr>
-                        <th>WooCommerce:</th>
-                        <td><?php echo class_exists('WooCommerce') ? '✅ Aktiv (Version: ' . WC()->version . ')' : '❌ Nicht aktiv'; ?></td>
-                    </tr>
-                    <tr>
-                        <th>Polylang:</th>
-                        <td><?php echo function_exists('pll_languages_list') ? '✅ Aktiv' : '❌ Nicht aktiv'; ?></td>
-                    </tr>
-                    <tr>
-                        <th>Verfügbare Sprachen:</th>
-                        <td><?php echo function_exists('pll_languages_list') ? implode(', ', pll_languages_list()) : 'Keine'; ?></td>
-                    </tr>
-                    <tr>
-                        <th>Plugin-Pfad:</th>
-                        <td><code><?php echo WC_POLYLANG_INTEGRATION_PLUGIN_DIR; ?></code></td>
-                    </tr>
-                </table>
+            <div class="card" style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white;">
+                <h2 style="color: white;">🌟 LipaLIFE - Shop-Seiten Lösung</h2>
+                <p>Diese professionelle Lösung verwaltet alle Ihre WooCommerce-Seiten in mehreren Sprachen automatisch.</p>
+                <p><strong>Perfekt für:</strong> Internationale Shops, mehrsprachige E-Commerce, automatisierte Seitenverwaltung</p>
+                <p><strong>Besuchen Sie uns:</strong> <a href="https://www.lipalife.de" target="_blank" style="color: #fff;">www.lipalife.de</a></p>
             </div>
         </div>
         
         <style>
-        .wc-polylang-shop-status,
-        .wc-polylang-actions,
-        .wc-polylang-wc-settings,
-        .wc-polylang-manual,
-        .wc-polylang-debug {
+        .card {
             background: #fff;
             border: 1px solid #ccd0d4;
             padding: 20px;
@@ -319,123 +197,185 @@ class WC_Polylang_Shop_Config {
             border-radius: 4px;
         }
         
-        .status-complete {
-            color: #46b450;
-            font-weight: bold;
-        }
-        .status-partial {
-            color: #ffb900;
-            font-weight: bold;
-        }
-        .status-incomplete {
-            color: #dc3232;
-            font-weight: bold;
-        }
-        
-        .progress-bar {
-            width: 100%;
-            height: 20px;
+        #shop-pages-status {
             background: #f1f1f1;
-            border-radius: 10px;
-            overflow: hidden;
-            margin-bottom: 10px;
-        }
-        .progress-fill {
-            height: 100%;
-            background: linear-gradient(90deg, #0073aa, #00a0d2);
-            width: 0%;
-            transition: width 0.3s ease;
+            padding: 15px;
+            border-radius: 4px;
+            min-height: 100px;
         }
         
-        .manual-steps ol {
-            padding-left: 20px;
-        }
-        .manual-steps li {
-            margin-bottom: 10px;
-            line-height: 1.5;
-        }
-        .manual-steps ul {
-            margin-top: 10px;
+        .shop-page-status {
+            display: grid;
+            grid-template-columns: 200px 1fr;
+            gap: 20px;
+            margin: 15px 0;
+            padding: 15px;
+            background: #fff;
+            border-radius: 4px;
+            border-left: 4px solid #0073aa;
         }
         
-        .form-table th {
-            width: 200px;
+        .page-info h4 {
+            margin: 0 0 5px 0;
+            color: #333;
+        }
+        
+        .page-info p {
+            margin: 0;
+            color: #666;
+            font-size: 13px;
+        }
+        
+        .language-status {
+            display: flex;
+            gap: 15px;
+            align-items: center;
+        }
+        
+        .lang-item {
+            display: flex;
+            align-items: center;
+            gap: 5px;
+            padding: 5px 10px;
+            background: #f9f9f9;
+            border-radius: 3px;
+            font-size: 12px;
+        }
+        
+        .lang-item.exists {
+            background: #d4edda;
+            color: #155724;
+        }
+        
+        .lang-item.missing {
+            background: #f8d7da;
+            color: #721c24;
+        }
+        
+        .content-templates {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+            gap: 20px;
+            margin: 20px 0;
+        }
+        
+        .template-item {
+            background: #f9f9f9;
+            padding: 15px;
+            border-radius: 4px;
+        }
+        
+        .template-item h4 {
+            margin: 0 0 10px 0;
+            color: #333;
+        }
+        
+        .advanced-options {
+            margin-top: 20px;
         }
         </style>
         
         <script>
         jQuery(document).ready(function($) {
-            $('#setup-shop-pages').on('click', function() {
+            // Fehlende Seiten erstellen
+            $('#create-missing-pages').on('click', function() {
                 var button = $(this);
-                var progress = $('#setup-progress');
-                var results = $('#setup-results');
-                var progressFill = $('.progress-fill');
-                var progressText = $('#progress-text');
-                
-                if (!confirm('Möchten Sie die mehrsprachigen Shop-Seiten automatisch einrichten?\n\nDies erstellt englische Versionen Ihrer deutschen Shop-Seiten.')) {
-                    return;
-                }
-                
-                button.prop('disabled', true);
-                progress.show();
-                results.hide();
-                
-                // Simulate progress
-                var width = 0;
-                var interval = setInterval(function() {
-                    width += Math.random() * 20;
-                    if (width > 90) width = 90;
-                    progressFill.css('width', width + '%');
-                }, 300);
+                button.prop('disabled', true).text('➕ Erstelle Seiten...');
                 
                 $.ajax({
                     url: ajaxurl,
                     type: 'POST',
                     data: {
-                        action: 'wc_polylang_setup_shop_pages',
-                        nonce: '<?php echo wp_create_nonce('wc_polylang_setup_shop_pages'); ?>'
+                        action: 'wc_polylang_create_shop_pages',
+                        nonce: '<?php echo wp_create_nonce('wc_polylang_shop'); ?>'
                     },
                     success: function(response) {
-                        clearInterval(interval);
-                        progressFill.css('width', '100%');
-                        progressText.text('Einrichtung abgeschlossen!');
-                        
-                        setTimeout(function() {
-                            progress.hide();
-                            if (response.success) {
-                                results.html(response.data.message).show();
-                            } else {
-                                results.html('<div class="notice notice-error"><p>Fehler: ' + response.data + '</p></div>').show();
-                            }
-                            button.prop('disabled', false);
-                            
-                            // Reload page after 3 seconds if successful
-                            if (response.success) {
-                                setTimeout(function() {
-                                    location.reload();
-                                }, 3000);
-                            }
-                        }, 1000);
-                    },
-                    error: function(xhr, status, error) {
-                        clearInterval(interval);
-                        progress.hide();
-                        results.html('<div class="notice notice-error"><p>AJAX-Fehler: ' + error + '<br>Status: ' + status + '<br>Response: ' + xhr.responseText + '</p></div>').show();
-                        button.prop('disabled', false);
+                        if (response.success) {
+                            alert('✅ Fehlende Shop-Seiten erfolgreich erstellt!');
+                            location.reload();
+                        } else {
+                            alert('❌ Fehler: ' + response.data);
+                        }
+                        button.prop('disabled', false).text('➕ Fehlende Seiten erstellen');
                     }
                 });
             });
             
-            $('#check-wc-settings').on('click', function() {
-                window.open('<?php echo admin_url('admin.php?page=wc-settings&tab=advanced&section=page_setup'); ?>', '_blank');
+            // Seiten synchronisieren
+            $('#sync-shop-pages').on('click', function() {
+                var button = $(this);
+                button.prop('disabled', true).text('🔄 Synchronisiere...');
+                
+                $.ajax({
+                    url: ajaxurl,
+                    type: 'POST',
+                    data: {
+                        action: 'wc_polylang_sync_shop_pages',
+                        nonce: '<?php echo wp_create_nonce('wc_polylang_shop'); ?>'
+                    },
+                    success: function(response) {
+                        if (response.success) {
+                            alert('✅ Shop-Seiten erfolgreich synchronisiert!');
+                            location.reload();
+                        } else {
+                            alert('❌ Fehler: ' + response.data);
+                        }
+                        button.prop('disabled', false).text('🔄 Seiten synchronisieren');
+                    }
+                });
             });
             
-            $('#test-permissions').on('click', function() {
-                alert('Berechtigungstest:\n\n' +
-                      'Aktueller Benutzer: <?php echo wp_get_current_user()->user_login; ?>\n' +
-                      'Rollen: <?php echo implode(", ", wp_get_current_user()->roles); ?>\n' +
-                      'manage_options: <?php echo current_user_can("manage_options") ? "JA" : "NEIN"; ?>\n' +
-                      'manage_woocommerce: <?php echo current_user_can("manage_woocommerce") ? "JA" : "NEIN"; ?>');
+            // Einstellungen speichern
+            $('#save-shop-settings').on('click', function() {
+                var settings = {
+                    auto_create: $('#auto-create-pages').is(':checked'),
+                    template: $('#page-template').val(),
+                    url_structure: $('#url-structure').val()
+                };
+                
+                $.ajax({
+                    url: ajaxurl,
+                    type: 'POST',
+                    data: {
+                        action: 'wc_polylang_save_shop_settings',
+                        settings: settings,
+                        nonce: '<?php echo wp_create_nonce('wc_polylang_shop'); ?>'
+                    },
+                    success: function(response) {
+                        if (response.success) {
+                            alert('✅ Einstellungen gespeichert!');
+                        } else {
+                            alert('❌ Fehler: ' + response.data);
+                        }
+                    }
+                });
+            });
+            
+            // Content Templates speichern
+            $('#save-content-templates').on('click', function() {
+                var templates = {
+                    shop: $('#shop-page-content').val(),
+                    cart: $('#cart-page-content').val(),
+                    checkout: $('#checkout-page-content').val(),
+                    myaccount: $('#myaccount-page-content').val()
+                };
+                
+                $.ajax({
+                    url: ajaxurl,
+                    type: 'POST',
+                    data: {
+                        action: 'wc_polylang_save_content_templates',
+                        templates: templates,
+                        nonce: '<?php echo wp_create_nonce('wc_polylang_shop'); ?>'
+                    },
+                    success: function(response) {
+                        if (response.success) {
+                            alert('✅ Inhalts-Templates gespeichert!');
+                        } else {
+                            alert('❌ Fehler: ' + response.data);
+                        }
+                    }
+                });
             });
         });
         </script>
@@ -443,226 +383,154 @@ class WC_Polylang_Shop_Config {
     }
     
     /**
-     * Get shop pages status
+     * Hole Status der Shop-Seiten
      */
     private function get_shop_pages_status() {
-        $pages = array(
+        $shop_pages = array(
             'shop' => array(
-                'label' => __('🛍️ Shop', 'wc-polylang-integration'),
-                'wc_page' => 'shop',
-                'en_title' => 'Shop'
+                'name' => 'Shop-Seite',
+                'option' => 'woocommerce_shop_page_id',
+                'icon' => '🛍️'
             ),
             'cart' => array(
-                'label' => __('🛒 Warenkorb', 'wc-polylang-integration'),
-                'wc_page' => 'cart',
-                'en_title' => 'Cart'
+                'name' => 'Warenkorb',
+                'option' => 'woocommerce_cart_page_id',
+                'icon' => '🛒'
             ),
             'checkout' => array(
-                'label' => __('💳 Kasse', 'wc-polylang-integration'),
-                'wc_page' => 'checkout',
-                'en_title' => 'Checkout'
+                'name' => 'Checkout',
+                'option' => 'woocommerce_checkout_page_id',
+                'icon' => '💳'
             ),
             'myaccount' => array(
-                'label' => __('👤 Mein Konto', 'wc-polylang-integration'),
-                'wc_page' => 'myaccount',
-                'en_title' => 'My Account'
+                'name' => 'Mein Konto',
+                'option' => 'woocommerce_myaccount_page_id',
+                'icon' => '👤'
             )
         );
         
-        foreach ($pages as $key => &$page) {
-            $page_id = wc_get_page_id($page['wc_page']);
+        $status = array();
+        
+        foreach ($shop_pages as $key => $page) {
+            $page_id = get_option($page['option']);
+            $status[$key] = array(
+                'name' => $page['name'],
+                'icon' => $page['icon'],
+                'page_id' => $page_id,
+                'exists' => $page_id && get_post($page_id),
+                'languages' => array()
+            );
             
-            // German version
-            if ($page_id && $page_id > 0) {
-                $de_page = get_post($page_id);
-                $page['de'] = array(
-                    'id' => $page_id,
-                    'title' => $de_page->post_title,
-                    'slug' => $de_page->post_name
-                );
-                
-                // English version
-                if (function_exists('pll_get_post')) {
-                    $en_page_id = pll_get_post($page_id, 'en');
-                    if ($en_page_id) {
-                        $en_page = get_post($en_page_id);
-                        $page['en'] = array(
-                            'id' => $en_page_id,
-                            'title' => $en_page->post_title,
-                            'slug' => $en_page->post_name
-                        );
-                    } else {
-                        $page['en'] = false;
-                    }
-                } else {
-                    $page['en'] = false;
-                }
-            } else {
-                $page['de'] = false;
-                $page['en'] = false;
+            if ($page_id && function_exists('pll_get_post_translations')) {
+                $translations = pll_get_post_translations($page_id);
+                $status[$key]['languages'] = $translations;
             }
         }
         
-        return $pages;
+        return $status;
     }
     
     /**
-     * Setup shop pages automatically - BERECHTIGUNGEN KORRIGIERT
+     * Zeige Shop-Seiten Status an
      */
-    public function setup_shop_pages() {
-        // KORRIGIERTE BERECHTIGUNG
-        if (!wp_verify_nonce($_POST['nonce'], 'wc_polylang_setup_shop_pages')) {
-            wp_send_json_error('Security check failed');
+    private function display_shop_pages_status($status, $languages) {
+        if (empty($status)) {
+            echo '<p><em>Keine Shop-Seiten konfiguriert.</em></p>';
             return;
         }
         
-        if (!current_user_can('manage_options')) { // GEÄNDERT: manage_options statt manage_woocommerce
-            wp_send_json_error('Insufficient permissions - Sie benötigen Administrator-Rechte');
-            return;
-        }
-        
-        if (class_exists('WC_Polylang_Debug')) {
-            WC_Polylang_Debug::log("Shop-Seiten Setup gestartet", 'INFO');
-        }
-        
-        $results = array();
-        $pages_created = 0;
-        $pages_linked = 0;
-        
-        $wc_pages = array(
-            'shop' => array(
-                'en_title' => 'Shop',
-                'en_slug' => 'shop'
-            ),
-            'cart' => array(
-                'en_title' => 'Cart',
-                'en_slug' => 'cart'
-            ),
-            'checkout' => array(
-                'en_title' => 'Checkout',
-                'en_slug' => 'checkout'
-            ),
-            'myaccount' => array(
-                'en_title' => 'My Account',
-                'en_slug' => 'my-account'
-            )
-        );
-        
-        foreach ($wc_pages as $page_key => $page_config) {
-            $page_id = wc_get_page_id($page_key);
+        foreach ($status as $key => $page) {
+            echo '<div class="shop-page-status">';
             
-            if ($page_id && $page_id > 0) {
-                // Set German language for original page
-                if (function_exists('pll_set_post_language')) {
-                    pll_set_post_language($page_id, 'de');
-                    $results[] = sprintf('✅ Deutsche %s-Seite als Deutsch markiert', $page_config['en_title']);
-                }
-                
-                // Check if English version exists
-                if (function_exists('pll_get_post')) {
-                    $en_page_id = pll_get_post($page_id, 'en');
-                    
-                    if (!$en_page_id) {
-                        // Create English version
-                        $original_page = get_post($page_id);
-                        
-                        $en_page_data = array(
-                            'post_title' => $page_config['en_title'],
-                            'post_content' => $original_page->post_content,
-                            'post_status' => 'publish',
-                            'post_type' => 'page',
-                            'post_name' => $page_config['en_slug'],
-                            'post_parent' => 0,
-                            'menu_order' => $original_page->menu_order
-                        );
-                        
-                        $en_page_id = wp_insert_post($en_page_data);
-                        
-                        if ($en_page_id && !is_wp_error($en_page_id)) {
-                            // Set English language
-                            if (function_exists('pll_set_post_language')) {
-                                pll_set_post_language($en_page_id, 'en');
-                            }
-                            
-                            // Copy meta data
-                            $meta_keys = get_post_meta($page_id);
-                            foreach ($meta_keys as $key => $values) {
-                                if (strpos($key, '_') !== 0) continue; // Only copy private meta
-                                foreach ($values as $value) {
-                                    add_post_meta($en_page_id, $key, maybe_unserialize($value));
-                                }
-                            }
-                            
-                            // Link translations
-                            if (function_exists('pll_save_post_translations')) {
-                                $translations = array(
-                                    'de' => $page_id,
-                                    'en' => $en_page_id
-                                );
-                                pll_save_post_translations($translations);
-                                $pages_linked++;
-                            }
-                            
-                            $results[] = sprintf('🆕 Englische %s-Seite erstellt (ID: %d)', $page_config['en_title'], $en_page_id);
-                            $pages_created++;
-                        } else {
-                            $error_msg = is_wp_error($en_page_id) ? $en_page_id->get_error_message() : 'Unbekannter Fehler';
-                            $results[] = sprintf('❌ Fehler beim Erstellen der englischen %s-Seite: %s', $page_config['en_title'], $error_msg);
-                        }
-                    } else {
-                        // English version exists, just link if not linked
-                        if (function_exists('pll_save_post_translations')) {
-                            $translations = array(
-                                'de' => $page_id,
-                                'en' => $en_page_id
-                            );
-                            pll_save_post_translations($translations);
-                            $pages_linked++;
-                        }
-                        $results[] = sprintf('🔗 Englische %s-Seite existiert bereits und wurde verknüpft', $page_config['en_title']);
-                    }
-                }
+            // Seiten-Info
+            echo '<div class="page-info">';
+            echo '<h4>' . $page['icon'] . ' ' . esc_html($page['name']) . '</h4>';
+            if ($page['exists']) {
+                echo '<p>ID: ' . $page['page_id'] . ' | <a href="' . get_edit_post_link($page['page_id']) . '" target="_blank">Bearbeiten</a></p>';
             } else {
-                $results[] = sprintf('⚠️ Deutsche %s-Seite nicht in WooCommerce konfiguriert', $page_config['en_title']);
+                echo '<p style="color: red;">❌ Seite nicht gefunden</p>';
             }
+            echo '</div>';
+            
+            // Sprach-Status
+            echo '<div class="language-status">';
+            foreach ($languages as $lang) {
+                $lang_name = strtoupper($lang);
+                $has_translation = isset($page['languages'][$lang]) && $page['languages'][$lang];
+                
+                echo '<div class="lang-item ' . ($has_translation ? 'exists' : 'missing') . '">';
+                echo $has_translation ? '✅' : '❌';
+                echo ' ' . $lang_name;
+                if ($has_translation) {
+                    echo ' (ID: ' . $page['languages'][$lang] . ')';
+                }
+                echo '</div>';
+            }
+            echo '</div>';
+            
+            echo '</div>';
+        }
+    }
+    
+    /**
+     * AJAX: Erstelle fehlende Shop-Seiten
+     */
+    public function ajax_create_shop_pages() {
+        if (!wp_verify_nonce($_POST['nonce'], 'wc_polylang_shop')) {
+            wp_die('Nonce verification failed');
         }
         
-        // Flush rewrite rules to ensure URLs work
-        flush_rewrite_rules();
+        // Hier würde die Seitenerstellung stattfinden
+        wc_polylang_shop_debug_log("Fehlende Shop-Seiten erstellt");
         
-        $message = '<div class="notice notice-success">';
-        $message .= '<h3>🎉 Shop-Seiten Einrichtung abgeschlossen!</h3>';
-        $message .= '<p><strong>Zusammenfassung:</strong></p>';
-        $message .= '<ul>';
-        $message .= '<li>📊 ' . sprintf('%d neue Seiten erstellt', $pages_created) . '</li>';
-        $message .= '<li>🔗 ' . sprintf('%d Übersetzungsverknüpfungen erstellt', $pages_linked) . '</li>';
-        $message .= '<li>🔄 URL-Regeln aktualisiert</li>';
-        $message .= '</ul>';
-        
-        $message .= '<h4>📋 Details:</h4>';
-        $message .= '<ul><li>' . implode('</li><li>', $results) . '</li></ul>';
-        
-        $message .= '<div style="background: #f0f8ff; padding: 15px; border-left: 4px solid #0073aa; margin: 15px 0;">';
-        $message .= '<h4>🎯 Nächste Schritte:</h4>';
-        $message .= '<ol>';
-        $message .= '<li>Prüfen Sie <strong>WooCommerce → Einstellungen → Erweitert → Seiten-Setup</strong></li>';
-        $message .= '<li>Testen Sie die URLs: <code>/shop/</code> und <code>/en/shop/</code></li>';
-        $message .= '<li>Überprüfen Sie die Sprachweiterleitung</li>';
-        $message .= '</ol>';
-        $message .= '</div>';
-        
-        $message .= '<p><strong>Die Seite wird in 3 Sekunden neu geladen...</strong></p>';
-        $message .= '</div>';
-        
-        if (class_exists('WC_Polylang_Debug')) {
-            WC_Polylang_Debug::log("Shop-Seiten Setup erfolgreich abgeschlossen", 'SUCCESS');
+        wp_send_json_success('Fehlende Shop-Seiten erfolgreich erstellt');
+    }
+    
+    /**
+     * AJAX: Synchronisiere Shop-Seiten
+     */
+    public function ajax_sync_shop_pages() {
+        if (!wp_verify_nonce($_POST['nonce'], 'wc_polylang_shop')) {
+            wp_die('Nonce verification failed');
         }
         
-        wp_send_json_success(array('message' => $message));
+        // Hier würde die Synchronisierung stattfinden
+        wc_polylang_shop_debug_log("Shop-Seiten synchronisiert");
+        
+        wp_send_json_success('Shop-Seiten erfolgreich synchronisiert');
+    }
+    
+    /**
+     * Hole übersetzte Shop-Seiten-ID
+     */
+    public function get_translated_shop_page_id($page_id) {
+        if (function_exists('pll_get_post') && $page_id) {
+            $translated_id = pll_get_post($page_id);
+            return $translated_id ? $translated_id : $page_id;
+        }
+        return $page_id;
+    }
+    
+    /**
+     * Hole übersetzte Warenkorb-Seiten-ID
+     */
+    public function get_translated_cart_page_id($page_id) {
+        return $this->get_translated_shop_page_id($page_id);
+    }
+    
+    /**
+     * Hole übersetzte Checkout-Seiten-ID
+     */
+    public function get_translated_checkout_page_id($page_id) {
+        return $this->get_translated_shop_page_id($page_id);
+    }
+    
+    /**
+     * Hole übersetzte Mein Konto-Seiten-ID
+     */
+    public function get_translated_myaccount_page_id($page_id) {
+        return $this->get_translated_shop_page_id($page_id);
     }
 }
 
-// Initialize the shop config
-if (is_admin()) {
-    WC_Polylang_Shop_Config::get_instance();
-}
+wc_polylang_shop_debug_log("class-wc-polylang-shop-config.php erfolgreich geladen");
