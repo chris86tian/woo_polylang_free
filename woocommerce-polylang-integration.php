@@ -3,7 +3,7 @@
  * Plugin Name: WooCommerce Polylang Integration
  * Plugin URI: https://example.com/woocommerce-polylang-integration
  * Description: Vollständige WooCommerce-Mehrsprachigkeit mit Polylang-Integration und Elementor Pro Support.
- * Version: 1.1.0
+ * Version: 1.2.0
  * Author: Your Name
  * Text Domain: wc-polylang-integration
  * Requires at least: 5.0
@@ -12,6 +12,8 @@
  * WC requires at least: 7.0
  * WC tested up to: 8.5
  * License: GPL v2 or later
+ * 
+ * @package WC_Polylang_Integration
  */
 
 // Prevent direct access
@@ -20,11 +22,22 @@ if (!defined('ABSPATH')) {
 }
 
 // Define plugin constants
-define('WC_POLYLANG_INTEGRATION_VERSION', '1.1.0');
+define('WC_POLYLANG_INTEGRATION_VERSION', '1.2.0');
 define('WC_POLYLANG_INTEGRATION_PLUGIN_FILE', __FILE__);
 define('WC_POLYLANG_INTEGRATION_PLUGIN_DIR', plugin_dir_path(__FILE__));
 define('WC_POLYLANG_INTEGRATION_PLUGIN_URL', plugin_dir_url(__FILE__));
 define('WC_POLYLANG_INTEGRATION_PLUGIN_BASENAME', plugin_basename(__FILE__));
+
+/**
+ * HPOS COMPATIBILITY DECLARATION
+ * Declare compatibility with WooCommerce High-Performance Order Storage (HPOS)
+ */
+add_action('before_woocommerce_init', function() {
+    if (class_exists('\Automattic\WooCommerce\Utilities\FeaturesUtil')) {
+        \Automattic\WooCommerce\Utilities\FeaturesUtil::declare_compatibility('custom_order_tables', __FILE__, true);
+        \Automattic\WooCommerce\Utilities\FeaturesUtil::declare_compatibility('orders_cache', __FILE__, true);
+    }
+});
 
 /**
  * CUSTOM DEBUG SYSTEM - Funktioniert IMMER!
@@ -120,10 +133,10 @@ class WC_Polylang_Debug {
 
 // Initialisiere Debug System SOFORT
 WC_Polylang_Debug::init();
-WC_Polylang_Debug::log("Plugin wird geladen...", 'INFO');
+WC_Polylang_Debug::log("Plugin wird geladen... (HPOS-kompatible Version)", 'INFO');
 
 /**
- * Main plugin class - MIT DEBUG SYSTEM
+ * Main plugin class - MIT HPOS SUPPORT
  */
 class WC_Polylang_Integration {
     
@@ -159,6 +172,9 @@ class WC_Polylang_Integration {
         WC_Polylang_Debug::log("Plugin init() gestartet", 'INFO');
         
         try {
+            // Check HPOS compatibility
+            $this->check_hpos_compatibility();
+            
             // Basic dependency check
             if (!class_exists('WooCommerce')) {
                 WC_Polylang_Debug::log("WooCommerce nicht gefunden", 'WARNING');
@@ -197,6 +213,24 @@ class WC_Polylang_Integration {
     }
     
     /**
+     * Check HPOS compatibility
+     */
+    private function check_hpos_compatibility() {
+        WC_Polylang_Debug::log("Prüfe HPOS-Kompatibilität...", 'INFO');
+        
+        if (class_exists('\Automattic\WooCommerce\Utilities\OrderUtil')) {
+            $hpos_enabled = \Automattic\WooCommerce\Utilities\OrderUtil::custom_orders_table_usage_is_enabled();
+            WC_Polylang_Debug::log("HPOS Status: " . ($hpos_enabled ? 'Aktiviert' : 'Deaktiviert'), 'INFO');
+            
+            if ($hpos_enabled) {
+                WC_Polylang_Debug::log("HPOS ist aktiviert - Plugin ist kompatibel", 'SUCCESS');
+            }
+        } else {
+            WC_Polylang_Debug::log("HPOS-Klassen nicht verfügbar (ältere WooCommerce-Version)", 'INFO');
+        }
+    }
+    
+    /**
      * Load components safely
      */
     private function load_components() {
@@ -227,7 +261,7 @@ class WC_Polylang_Integration {
         
         WC_Polylang_Debug::log("Alle Dateien geladen - starte Komponenten-Initialisierung", 'INFO');
         
-        // Initialize components safely - MIT DETAILLIERTEM DEBUG
+        // Initialize components safely
         try {
             WC_Polylang_Debug::log("Prüfe Admin-Bereich...", 'DEBUG');
             if (is_admin()) {
@@ -295,8 +329,8 @@ class WC_Polylang_Integration {
             <h1>🌍 WooCommerce Polylang Integration</h1>
             
             <div class="notice notice-success">
-                <p><strong>✅ Plugin erfolgreich aktiviert!</strong></p>
-                <p>Das Plugin läuft jetzt im Debug-Modus. Alle Aktivitäten werden geloggt.</p>
+                <p><strong>✅ Plugin erfolgreich aktiviert und HPOS-kompatibel!</strong></p>
+                <p>Das Plugin ist jetzt vollständig kompatibel mit WooCommerce High-Performance Order Storage (HPOS).</p>
             </div>
             
             <div class="card">
@@ -322,6 +356,7 @@ class WC_Polylang_Integration {
                     <li>✅ SEO-Optimierung</li>
                     <li>✅ Elementor Pro Integration</li>
                     <li>✅ Email-Übersetzungen</li>
+                    <li>✅ HPOS-Kompatibilität</li>
                 </ul>
             </div>
             
@@ -341,6 +376,17 @@ class WC_Polylang_Integration {
                         <td><?php echo defined('ELEMENTOR_PRO_VERSION') ? '✅ Aktiv' : '⚠️ Nicht gefunden'; ?></td>
                     </tr>
                     <tr>
+                        <td><strong>HPOS (High-Performance Orders):</strong></td>
+                        <td><?php 
+                            if (class_exists('\Automattic\WooCommerce\Utilities\OrderUtil')) {
+                                $hpos_enabled = \Automattic\WooCommerce\Utilities\OrderUtil::custom_orders_table_usage_is_enabled();
+                                echo $hpos_enabled ? '✅ Aktiviert & Kompatibel' : '⚠️ Deaktiviert';
+                            } else {
+                                echo '⚠️ Nicht verfügbar';
+                            }
+                        ?></td>
+                    </tr>
+                    <tr>
                         <td><strong>PHP Version:</strong></td>
                         <td><?php echo PHP_VERSION; ?></td>
                     </tr>
@@ -349,8 +395,8 @@ class WC_Polylang_Integration {
                         <td><?php echo get_bloginfo('version'); ?></td>
                     </tr>
                     <tr>
-                        <td><strong>Debug-Log Datei:</strong></td>
-                        <td><?php echo file_exists(WP_CONTENT_DIR . '/wc-polylang-debug.log') ? '✅ Existiert' : '❌ Nicht gefunden'; ?></td>
+                        <td><strong>Plugin Version:</strong></td>
+                        <td><?php echo WC_POLYLANG_INTEGRATION_VERSION; ?></td>
                     </tr>
                 </table>
             </div>
