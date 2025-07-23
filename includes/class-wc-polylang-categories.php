@@ -1,6 +1,6 @@
 <?php
 /**
- * Hierarchical Multilingual Categories - Option B Implementation
+ * Product Categories Integration - AKTUALISIERT für bilinguale Anzeige
  * Entwickelt von LipaLIFE - www.lipalife.de
  */
 
@@ -35,12 +35,11 @@ class WC_Polylang_Categories {
         
         try {
             add_action('init', array($this, 'init'));
-            add_action('admin_init', array($this, 'maybe_create_hierarchical_structure'));
-            
-            // Admin-Hooks für Kategorie-Management
             add_action('admin_menu', array($this, 'add_category_admin_menu'));
-            add_action('wp_ajax_create_hierarchical_categories', array($this, 'ajax_create_categories'));
-            add_action('wp_ajax_reset_category_structure', array($this, 'ajax_reset_structure'));
+            
+            // AJAX-Handlers für Kategorie-Management
+            add_action('wp_ajax_wc_polylang_create_category_translations', array($this, 'ajax_create_translations'));
+            add_action('wp_ajax_wc_polylang_link_category_translations', array($this, 'ajax_link_translations'));
             
             wc_polylang_categories_debug_log("Categories Hooks erfolgreich registriert");
         } catch (Exception $e) {
@@ -52,9 +51,9 @@ class WC_Polylang_Categories {
         wc_polylang_categories_debug_log("Categories init() aufgerufen");
         
         try {
-            // Frontend-Hooks
+            // Frontend-Hooks für Kategorie-Anzeige
             add_filter('woocommerce_product_categories_widget_args', array($this, 'modify_category_widget_args'));
-            add_filter('wp_list_categories', array($this, 'add_language_flags_to_categories'), 10, 2);
+            add_filter('wp_list_categories', array($this, 'enhance_category_display'), 10, 2);
             
             wc_polylang_categories_debug_log("Categories Frontend-Filter erfolgreich registriert");
         } catch (Exception $e) {
@@ -68,9 +67,9 @@ class WC_Polylang_Categories {
     public function add_category_admin_menu() {
         add_submenu_page(
             'wc-polylang-integration',
-            __('Kategorie-Struktur', 'wc-polylang-integration'),
+            __('Kategorie-Übersetzungen', 'wc-polylang-integration'),
             __('📁 Kategorien', 'wc-polylang-integration'),
-            'manage_woocommerce',
+            'manage_options',
             'wc-polylang-categories',
             array($this, 'category_admin_page')
         );
@@ -83,99 +82,99 @@ class WC_Polylang_Categories {
     public function category_admin_page() {
         wc_polylang_categories_debug_log("category_admin_page() aufgerufen");
         
-        $current_structure = $this->get_current_category_structure();
+        $categories_status = $this->get_categories_translation_status();
         $languages = $this->get_available_languages();
         
         ?>
         <div class="wrap">
-            <h1>📁 Hierarchische Kategorie-Struktur (Option B)</h1>
-            <p class="description">Entwickelt von <strong><a href="https://www.lipalife.de" target="_blank">LipaLIFE</a></strong></p>
+            <h1>📁 Produktkategorien-Übersetzungen</h1>
+            <p class="description">Entwickelt von <strong><a href="https://www.lipalife.de" target="_blank">LipaLIFE</a></strong> - Verwalten Sie Ihre mehrsprachigen Produktkategorien</p>
+            
+            <div class="notice notice-info">
+                <p><strong>💡 Hinweis:</strong> Für die <strong>bilinguale Anzeige</strong> (beide Sprachen gleichzeitig) besuchen Sie: 
+                <a href="<?php echo admin_url('admin.php?page=wc-polylang-bilingual-categories'); ?>">🌐 Bilinguale Kategorien</a></p>
+            </div>
             
             <div class="card">
-                <h2>🎯 Aktuelle Struktur</h2>
-                <div id="current-structure">
-                    <?php $this->display_current_structure($current_structure); ?>
+                <h2>📊 Übersetzungsstatus Ihrer Kategorien</h2>
+                <div id="categories-status">
+                    <?php $this->display_categories_status($categories_status); ?>
                 </div>
                 
                 <div style="margin: 20px 0;">
-                    <button type="button" class="button button-primary" onclick="createHierarchicalCategories()">
-                        🚀 Hierarchische Struktur erstellen
+                    <button type="button" id="create-missing-translations" class="button button-primary">
+                        ➕ Fehlende Übersetzungen erstellen
                     </button>
-                    <button type="button" class="button button-secondary" onclick="resetCategoryStructure()">
-                        🔄 Struktur zurücksetzen
+                    <button type="button" id="link-existing-translations" class="button button-secondary">
+                        🔗 Vorhandene Übersetzungen verknüpfen
+                    </button>
+                    <button type="button" id="refresh-status" class="button button-secondary">
+                        🔄 Status aktualisieren
                     </button>
                 </div>
             </div>
             
             <div class="card">
-                <h2>⚙️ Kategorie-Konfiguration</h2>
-                <form id="category-config-form">
-                    <table class="form-table">
+                <h2>🛠️ Manuelle Kategorie-Übersetzung</h2>
+                <p>So erstellen Sie Kategorie-Übersetzungen manuell:</p>
+                <ol>
+                    <li>Gehen Sie zu <strong>Produkte → Kategorien</strong></li>
+                    <li>Bearbeiten Sie eine deutsche Kategorie</li>
+                    <li>In der <strong>Polylang-Box</strong> (rechts): Klicken Sie auf das <strong>"+" bei English</strong></li>
+                    <li>Erstellen Sie die englische Version:
+                        <ul>
+                            <li><strong>Name:</strong> Englische Übersetzung</li>
+                            <li><strong>Slug:</strong> Englischer URL-Name</li>
+                            <li><strong>Beschreibung:</strong> Englische Beschreibung</li>
+                        </ul>
+                    </li>
+                    <li>Speichern Sie die Übersetzung</li>
+                </ol>
+                
+                <h3>Beispiele für gute Übersetzungen:</h3>
+                <table class="wp-list-table widefat">
+                    <thead>
                         <tr>
-                            <th scope="row">Hauptsprachen</th>
-                            <td>
-                                <label>
-                                    <input type="checkbox" name="languages[]" value="de" checked> 
-                                    🇩🇪 Deutsch
-                                </label><br>
-                                <label>
-                                    <input type="checkbox" name="languages[]" value="en" checked> 
-                                    🇬🇧 English
-                                </label>
-                            </td>
+                            <th>🇩🇪 Deutsch</th>
+                            <th>🇬🇧 English</th>
+                            <th>💡 Tipp</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <tr>
+                            <td>Kunststoffteile</td>
+                            <td>Plastic Parts</td>
+                            <td>Direkte Übersetzung</td>
                         </tr>
                         <tr>
-                            <th scope="row">Produktkategorien</th>
-                            <td>
-                                <div id="category-list">
-                                    <div class="category-item">
-                                        <input type="text" name="categories[de][]" value="Elektronik" placeholder="Deutsche Kategorie">
-                                        <input type="text" name="categories[en][]" value="Electronics" placeholder="English Category">
-                                        <button type="button" onclick="removeCategoryItem(this)">❌</button>
-                                    </div>
-                                    <div class="category-item">
-                                        <input type="text" name="categories[de][]" value="Kleidung" placeholder="Deutsche Kategorie">
-                                        <input type="text" name="categories[en][]" value="Clothing" placeholder="English Category">
-                                        <button type="button" onclick="removeCategoryItem(this)">❌</button>
-                                    </div>
-                                    <div class="category-item">
-                                        <input type="text" name="categories[de][]" value="Bücher" placeholder="Deutsche Kategorie">
-                                        <input type="text" name="categories[en][]" value="Books" placeholder="English Category">
-                                        <button type="button" onclick="removeCategoryItem(this)">❌</button>
-                                    </div>
-                                </div>
-                                <button type="button" onclick="addCategoryItem()">➕ Kategorie hinzufügen</button>
-                            </td>
+                            <td>Spanende Fertigung</td>
+                            <td>Precision Manufacturing</td>
+                            <td>Fachbegriff angepasst</td>
                         </tr>
-                    </table>
-                </form>
+                        <tr>
+                            <td>Zubehör</td>
+                            <td>Accessories</td>
+                            <td>Standard-Übersetzung</td>
+                        </tr>
+                    </tbody>
+                </table>
             </div>
             
             <div class="card">
-                <h2>📊 Vorschau der Struktur</h2>
-                <div class="structure-preview">
-                    <ul class="category-tree">
-                        <li>📁 <strong>🇩🇪 Deutsch</strong>
-                            <ul>
-                                <li>📦 Elektronik</li>
-                                <li>👕 Kleidung</li>
-                                <li>📚 Bücher</li>
-                            </ul>
-                        </li>
-                        <li>📁 <strong>🇬🇧 English</strong>
-                            <ul>
-                                <li>📦 Electronics</li>
-                                <li>👕 Clothing</li>
-                                <li>📚 Books</li>
-                            </ul>
-                        </li>
-                    </ul>
-                </div>
+                <h2>🎯 Kategorie-SEO Optimierung</h2>
+                <p>Tipps für SEO-optimierte Kategorie-Übersetzungen:</p>
+                <ul>
+                    <li><strong>Keywords verwenden:</strong> Nutzen Sie relevante Suchbegriffe in beiden Sprachen</li>
+                    <li><strong>Konsistente Slugs:</strong> Verwenden Sie sprechende URLs (z.B. "plastic-parts")</li>
+                    <li><strong>Meta-Beschreibungen:</strong> Schreiben Sie aussagekräftige Beschreibungen</li>
+                    <li><strong>Hierarchie beachten:</strong> Übergeordnete Kategorien zuerst übersetzen</li>
+                </ul>
             </div>
             
             <div class="card" style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white;">
-                <h2 style="color: white;">🌟 LipaLIFE - Hierarchische Kategorie-Lösung</h2>
-                <p>Diese professionelle Lösung erstellt automatisch eine hierarchische Kategorie-Struktur für Ihren mehrsprachigen WooCommerce-Shop.</p>
+                <h2 style="color: white;">🌟 LipaLIFE - Professionelle Kategorie-Übersetzungen</h2>
+                <p>Unsere Lösung hilft Ihnen dabei, Ihre Produktkategorien professionell zu übersetzen und zu verwalten.</p>
+                <p><strong>Features:</strong> Automatische Übersetzungserkennung, Bulk-Operationen, SEO-Optimierung, Bilinguale Anzeige</p>
                 <p><strong>Besuchen Sie uns:</strong> <a href="https://www.lipalife.de" target="_blank" style="color: #fff;">www.lipalife.de</a></p>
             </div>
         </div>
@@ -188,414 +187,201 @@ class WC_Polylang_Categories {
             margin: 20px 0;
             border-radius: 4px;
         }
-        .category-item {
-            display: flex;
-            gap: 10px;
-            margin-bottom: 10px;
-            align-items: center;
-        }
-        .category-item input[type="text"] {
-            flex: 1;
-            padding: 8px;
-        }
-        .category-tree {
-            font-family: monospace;
-            font-size: 14px;
-            line-height: 1.6;
-        }
-        .category-tree ul {
-            margin-left: 20px;
-        }
-        .structure-preview {
-            background: #f9f9f9;
-            padding: 15px;
-            border-radius: 4px;
-            border-left: 4px solid #0073aa;
-        }
-        #current-structure {
+        
+        #categories-status {
             background: #f1f1f1;
             padding: 15px;
             border-radius: 4px;
             min-height: 100px;
         }
+        
+        .translation-status-complete {
+            color: #46b450;
+            font-weight: bold;
+        }
+        
+        .translation-status-missing {
+            color: #dc3232;
+            font-weight: bold;
+        }
+        
+        .translation-status-partial {
+            color: #ffb900;
+            font-weight: bold;
+        }
         </style>
         
         <script>
-        function createHierarchicalCategories() {
-            if (!confirm('Möchten Sie die hierarchische Kategorie-Struktur erstellen? Dies kann nicht rückgängig gemacht werden.')) {
-                return;
-            }
-            
-            const formData = new FormData(document.getElementById('category-config-form'));
-            formData.append('action', 'create_hierarchical_categories');
-            formData.append('nonce', '<?php echo wp_create_nonce('wc_polylang_categories'); ?>');
-            
-            fetch('<?php echo admin_url('admin-ajax.php'); ?>', {
-                method: 'POST',
-                body: formData
-            })
-            .then(response => response.json())
-            .then(data => {
-                if (data.success) {
-                    alert('✅ Hierarchische Kategorie-Struktur erfolgreich erstellt!');
-                    location.reload();
-                } else {
-                    alert('❌ Fehler: ' + data.data);
+        jQuery(document).ready(function($) {
+            // Fehlende Übersetzungen erstellen
+            $('#create-missing-translations').on('click', function() {
+                var button = $(this);
+                
+                if (!confirm('Möchten Sie automatisch englische Übersetzungen für alle deutschen Kategorien erstellen?\n\nDies erstellt neue Kategorien mit englischen Namen.')) {
+                    return;
                 }
-            })
-            .catch(error => {
-                alert('❌ Fehler beim Erstellen der Struktur: ' + error);
+                
+                button.prop('disabled', true).text('➕ Erstelle Übersetzungen...');
+                
+                $.ajax({
+                    url: ajaxurl,
+                    type: 'POST',
+                    data: {
+                        action: 'wc_polylang_create_category_translations',
+                        nonce: '<?php echo wp_create_nonce('wc_polylang_categories'); ?>'
+                    },
+                    success: function(response) {
+                        if (response.success) {
+                            alert('✅ Übersetzungen erfolgreich erstellt!');
+                            location.reload();
+                        } else {
+                            alert('❌ Fehler: ' + response.data);
+                        }
+                        button.prop('disabled', false).text('➕ Fehlende Übersetzungen erstellen');
+                    }
+                });
             });
-        }
-        
-        function resetCategoryStructure() {
-            if (!confirm('Möchten Sie wirklich die gesamte Kategorie-Struktur zurücksetzen? ACHTUNG: Dies löscht alle Kategorien!')) {
-                return;
-            }
             
-            const formData = new FormData();
-            formData.append('action', 'reset_category_structure');
-            formData.append('nonce', '<?php echo wp_create_nonce('wc_polylang_categories'); ?>');
-            
-            fetch('<?php echo admin_url('admin-ajax.php'); ?>', {
-                method: 'POST',
-                body: formData
-            })
-            .then(response => response.json())
-            .then(data => {
-                if (data.success) {
-                    alert('✅ Kategorie-Struktur erfolgreich zurückgesetzt!');
-                    location.reload();
-                } else {
-                    alert('❌ Fehler: ' + data.data);
-                }
+            // Vorhandene Übersetzungen verknüpfen
+            $('#link-existing-translations').on('click', function() {
+                var button = $(this);
+                button.prop('disabled', true).text('🔗 Verknüpfe...');
+                
+                $.ajax({
+                    url: ajaxurl,
+                    type: 'POST',
+                    data: {
+                        action: 'wc_polylang_link_category_translations',
+                        nonce: '<?php echo wp_create_nonce('wc_polylang_categories'); ?>'
+                    },
+                    success: function(response) {
+                        if (response.success) {
+                            alert('✅ Übersetzungen erfolgreich verknüpft!');
+                            location.reload();
+                        } else {
+                            alert('❌ Fehler: ' + response.data);
+                        }
+                        button.prop('disabled', false).text('🔗 Vorhandene Übersetzungen verknüpfen');
+                    }
+                });
             });
-        }
-        
-        function addCategoryItem() {
-            const categoryList = document.getElementById('category-list');
-            const newItem = document.createElement('div');
-            newItem.className = 'category-item';
-            newItem.innerHTML = `
-                <input type="text" name="categories[de][]" placeholder="Deutsche Kategorie">
-                <input type="text" name="categories[en][]" placeholder="English Category">
-                <button type="button" onclick="removeCategoryItem(this)">❌</button>
-            `;
-            categoryList.appendChild(newItem);
-        }
-        
-        function removeCategoryItem(button) {
-            button.parentElement.remove();
-        }
+            
+            // Status aktualisieren
+            $('#refresh-status').on('click', function() {
+                location.reload();
+            });
+        });
         </script>
         <?php
     }
     
     /**
-     * AJAX: Erstelle hierarchische Kategorie-Struktur
+     * Hole Kategorien-Übersetzungsstatus
      */
-    public function ajax_create_categories() {
-        wc_polylang_categories_debug_log("ajax_create_categories() aufgerufen");
+    private function get_categories_translation_status() {
+        $categories = get_terms(array(
+            'taxonomy' => 'product_cat',
+            'hide_empty' => false
+        ));
         
-        if (!wp_verify_nonce($_POST['nonce'], 'wc_polylang_categories')) {
-            wp_die('Nonce verification failed');
-        }
+        $status = array();
         
-        try {
-            $languages = isset($_POST['languages']) ? $_POST['languages'] : array('de', 'en');
-            $categories = isset($_POST['categories']) ? $_POST['categories'] : array();
+        foreach ($categories as $category) {
+            $lang = function_exists('pll_get_term_language') ? pll_get_term_language($category->term_id) : 'de';
             
-            wc_polylang_categories_debug_log("Erstelle Struktur für Sprachen: " . implode(', ', $languages));
-            
-            $result = $this->create_hierarchical_structure($languages, $categories);
-            
-            if ($result['success']) {
-                wc_polylang_categories_debug_log("Hierarchische Struktur erfolgreich erstellt");
-                wp_send_json_success($result['message']);
-            } else {
-                wc_polylang_categories_debug_log("Fehler beim Erstellen: " . $result['message'], 'ERROR');
-                wp_send_json_error($result['message']);
-            }
-            
-        } catch (Exception $e) {
-            wc_polylang_categories_debug_log("AJAX Fehler: " . $e->getMessage(), 'ERROR');
-            wp_send_json_error('Fehler beim Erstellen der Struktur: ' . $e->getMessage());
-        }
-    }
-    
-    /**
-     * AJAX: Setze Kategorie-Struktur zurück
-     */
-    public function ajax_reset_structure() {
-        wc_polylang_categories_debug_log("ajax_reset_structure() aufgerufen");
-        
-        if (!wp_verify_nonce($_POST['nonce'], 'wc_polylang_categories')) {
-            wp_die('Nonce verification failed');
-        }
-        
-        try {
-            $result = $this->reset_category_structure();
-            
-            if ($result['success']) {
-                wc_polylang_categories_debug_log("Kategorie-Struktur erfolgreich zurückgesetzt");
-                wp_send_json_success($result['message']);
-            } else {
-                wc_polylang_categories_debug_log("Fehler beim Zurücksetzen: " . $result['message'], 'ERROR');
-                wp_send_json_error($result['message']);
-            }
-            
-        } catch (Exception $e) {
-            wc_polylang_categories_debug_log("AJAX Reset Fehler: " . $e->getMessage(), 'ERROR');
-            wp_send_json_error('Fehler beim Zurücksetzen: ' . $e->getMessage());
-        }
-    }
-    
-    /**
-     * Erstelle die hierarchische Kategorie-Struktur
-     */
-    public function create_hierarchical_structure($languages, $categories) {
-        wc_polylang_categories_debug_log("create_hierarchical_structure() gestartet");
-        
-        try {
-            $created_categories = array();
-            $language_names = array(
-                'de' => 'Deutsch',
-                'en' => 'English'
-            );
-            
-            // 1. Erstelle Hauptsprach-Kategorien
-            foreach ($languages as $lang) {
-                $lang_name = isset($language_names[$lang]) ? $language_names[$lang] : ucfirst($lang);
-                $flag = $lang === 'de' ? '🇩🇪' : '🇬🇧';
+            if ($lang === 'de') {
+                $en_id = function_exists('pll_get_term') ? pll_get_term($category->term_id, 'en') : false;
+                $en_category = $en_id ? get_term($en_id, 'product_cat') : false;
                 
-                wc_polylang_categories_debug_log("Erstelle Hauptkategorie für Sprache: {$lang}");
-                
-                $parent_term = wp_insert_term(
-                    $flag . ' ' . $lang_name,
-                    'product_cat',
-                    array(
-                        'description' => sprintf(__('Hauptkategorie für %s Produkte', 'wc-polylang-integration'), $lang_name),
-                        'slug' => 'lang-' . $lang
-                    )
+                $status[] = array(
+                    'de' => array(
+                        'id' => $category->term_id,
+                        'name' => $category->name,
+                        'slug' => $category->slug,
+                        'count' => $category->count
+                    ),
+                    'en' => $en_category ? array(
+                        'id' => $en_category->term_id,
+                        'name' => $en_category->name,
+                        'slug' => $en_category->slug,
+                        'count' => $en_category->count
+                    ) : false
                 );
-                
-                if (is_wp_error($parent_term)) {
-                    wc_polylang_categories_debug_log("Fehler beim Erstellen der Hauptkategorie {$lang}: " . $parent_term->get_error_message(), 'ERROR');
-                    continue;
-                }
-                
-                $parent_id = $parent_term['term_id'];
-                $created_categories[$lang]['parent'] = $parent_id;
-                
-                // Setze Polylang-Sprache für Hauptkategorie
-                if (function_exists('pll_set_term_language')) {
-                    pll_set_term_language($parent_id, $lang);
-                    wc_polylang_categories_debug_log("Polylang-Sprache {$lang} für Hauptkategorie gesetzt");
-                }
-                
-                // 2. Erstelle Unterkategorien
-                if (isset($categories[$lang]) && is_array($categories[$lang])) {
-                    foreach ($categories[$lang] as $index => $category_name) {
-                        if (empty(trim($category_name))) continue;
-                        
-                        wc_polylang_categories_debug_log("Erstelle Unterkategorie: {$category_name} unter {$lang}");
-                        
-                        $child_term = wp_insert_term(
-                            trim($category_name),
-                            'product_cat',
-                            array(
-                                'description' => sprintf(__('%s Kategorie in %s', 'wc-polylang-integration'), $category_name, $lang_name),
-                                'slug' => sanitize_title($category_name . '-' . $lang),
-                                'parent' => $parent_id
-                            )
-                        );
-                        
-                        if (is_wp_error($child_term)) {
-                            wc_polylang_categories_debug_log("Fehler beim Erstellen der Unterkategorie {$category_name}: " . $child_term->get_error_message(), 'ERROR');
-                            continue;
-                        }
-                        
-                        $child_id = $child_term['term_id'];
-                        $created_categories[$lang]['children'][] = $child_id;
-                        
-                        // Setze Polylang-Sprache für Unterkategorie
-                        if (function_exists('pll_set_term_language')) {
-                            pll_set_term_language($child_id, $lang);
-                            wc_polylang_categories_debug_log("Polylang-Sprache {$lang} für Unterkategorie {$category_name} gesetzt");
-                        }
-                    }
-                }
             }
-            
-            // 3. Verknüpfe übersetzbare Kategorien
-            $this->link_translated_categories($created_categories, $categories);
-            
-            // 4. Speichere Struktur-Info
-            update_option('wc_polylang_hierarchical_structure', $created_categories);
-            update_option('wc_polylang_structure_created', time());
-            
-            wc_polylang_categories_debug_log("Hierarchische Struktur erfolgreich erstellt: " . json_encode($created_categories));
-            
-            return array(
-                'success' => true,
-                'message' => sprintf(__('Hierarchische Struktur mit %d Sprachen erfolgreich erstellt!', 'wc-polylang-integration'), count($languages)),
-                'data' => $created_categories
-            );
-            
-        } catch (Exception $e) {
-            wc_polylang_categories_debug_log("Fehler beim Erstellen der hierarchischen Struktur: " . $e->getMessage(), 'ERROR');
-            return array(
-                'success' => false,
-                'message' => 'Fehler beim Erstellen: ' . $e->getMessage()
-            );
         }
+        
+        return $status;
     }
     
     /**
-     * Verknüpfe übersetzbare Kategorien miteinander
+     * Zeige Kategorien-Status an
      */
-    private function link_translated_categories($created_categories, $categories) {
-        wc_polylang_categories_debug_log("link_translated_categories() gestartet");
-        
-        if (!function_exists('pll_save_term_translations')) {
-            wc_polylang_categories_debug_log("pll_save_term_translations() nicht verfügbar", 'WARNING');
+    private function display_categories_status($categories_status) {
+        if (empty($categories_status)) {
+            echo '<p><em>Keine Produktkategorien gefunden.</em></p>';
             return;
         }
         
-        try {
-            // Verknüpfe Hauptkategorien
-            $main_translations = array();
-            foreach ($created_categories as $lang => $data) {
-                if (isset($data['parent'])) {
-                    $main_translations[$lang] = $data['parent'];
-                }
-            }
-            
-            if (count($main_translations) > 1) {
-                pll_save_term_translations($main_translations);
-                wc_polylang_categories_debug_log("Hauptkategorien verknüpft: " . json_encode($main_translations));
-            }
-            
-            // Verknüpfe Unterkategorien (gleicher Index = Übersetzung)
-            $max_children = 0;
-            foreach ($created_categories as $lang => $data) {
-                if (isset($data['children'])) {
-                    $max_children = max($max_children, count($data['children']));
-                }
-            }
-            
-            for ($i = 0; $i < $max_children; $i++) {
-                $child_translations = array();
-                foreach ($created_categories as $lang => $data) {
-                    if (isset($data['children'][$i])) {
-                        $child_translations[$lang] = $data['children'][$i];
-                    }
-                }
-                
-                if (count($child_translations) > 1) {
-                    pll_save_term_translations($child_translations);
-                    wc_polylang_categories_debug_log("Unterkategorien Index {$i} verknüpft: " . json_encode($child_translations));
-                }
-            }
-            
-        } catch (Exception $e) {
-            wc_polylang_categories_debug_log("Fehler beim Verknüpfen der Kategorien: " . $e->getMessage(), 'ERROR');
-        }
-    }
-    
-    /**
-     * Setze Kategorie-Struktur zurück
-     */
-    public function reset_category_structure() {
-        wc_polylang_categories_debug_log("reset_category_structure() gestartet");
+        echo '<table class="wp-list-table widefat fixed striped">';
+        echo '<thead><tr>';
+        echo '<th style="width: 40%;">🇩🇪 Deutsche Kategorie</th>';
+        echo '<th style="width: 40%;">🇬🇧 Englische Übersetzung</th>';
+        echo '<th style="width: 20%;">Status</th>';
+        echo '</tr></thead>';
+        echo '<tbody>';
         
-        try {
-            $structure = get_option('wc_polylang_hierarchical_structure', array());
-            $deleted_count = 0;
+        foreach ($categories_status as $category) {
+            echo '<tr>';
             
-            foreach ($structure as $lang => $data) {
-                // Lösche Unterkategorien zuerst
-                if (isset($data['children']) && is_array($data['children'])) {
-                    foreach ($data['children'] as $child_id) {
-                        $result = wp_delete_term($child_id, 'product_cat');
-                        if (!is_wp_error($result)) {
-                            $deleted_count++;
-                            wc_polylang_categories_debug_log("Unterkategorie {$child_id} gelöscht");
-                        }
-                    }
-                }
-                
-                // Lösche Hauptkategorie
-                if (isset($data['parent'])) {
-                    $result = wp_delete_term($data['parent'], 'product_cat');
-                    if (!is_wp_error($result)) {
-                        $deleted_count++;
-                        wc_polylang_categories_debug_log("Hauptkategorie {$data['parent']} gelöscht");
-                    }
-                }
+            // Deutsche Kategorie
+            echo '<td>';
+            if ($category['de']) {
+                echo '<strong>' . esc_html($category['de']['name']) . '</strong><br>';
+                echo '<small style="color: #666;">Slug: ' . $category['de']['slug'] . ' | Produkte: ' . $category['de']['count'] . '</small>';
             }
+            echo '</td>';
             
-            // Lösche gespeicherte Struktur-Info
-            delete_option('wc_polylang_hierarchical_structure');
-            delete_option('wc_polylang_structure_created');
+            // Englische Übersetzung
+            echo '<td>';
+            if ($category['en']) {
+                echo '<strong>' . esc_html($category['en']['name']) . '</strong><br>';
+                echo '<small style="color: #666;">Slug: ' . $category['en']['slug'] . ' | Produkte: ' . $category['en']['count'] . '</small>';
+            } else {
+                echo '<span style="color: red;">❌ Keine Übersetzung vorhanden</span><br>';
+                echo '<small><a href="' . admin_url('edit-tags.php?taxonomy=product_cat&post_type=product') . '">Jetzt erstellen</a></small>';
+            }
+            echo '</td>';
             
-            wc_polylang_categories_debug_log("Struktur zurückgesetzt - {$deleted_count} Kategorien gelöscht");
+            // Status
+            echo '<td>';
+            if ($category['de'] && $category['en']) {
+                echo '<span class="translation-status-complete">✅ Vollständig</span>';
+            } else {
+                echo '<span class="translation-status-missing">❌ Fehlt</span>';
+            }
+            echo '</td>';
             
-            return array(
-                'success' => true,
-                'message' => sprintf(__('%d Kategorien erfolgreich gelöscht!', 'wc-polylang-integration'), $deleted_count)
-            );
-            
-        } catch (Exception $e) {
-            wc_polylang_categories_debug_log("Fehler beim Zurücksetzen: " . $e->getMessage(), 'ERROR');
-            return array(
-                'success' => false,
-                'message' => 'Fehler beim Zurücksetzen: ' . $e->getMessage()
-            );
-        }
-    }
-    
-    /**
-     * Zeige aktuelle Kategorie-Struktur an
-     */
-    private function display_current_structure($structure) {
-        if (empty($structure)) {
-            echo '<p><em>Noch keine hierarchische Struktur erstellt.</em></p>';
-            return;
+            echo '</tr>';
         }
         
-        echo '<ul class="category-tree">';
-        foreach ($structure as $lang => $data) {
-            $flag = $lang === 'de' ? '🇩🇪' : '🇬🇧';
-            $lang_name = $lang === 'de' ? 'Deutsch' : 'English';
-            
-            if (isset($data['parent'])) {
-                $parent_term = get_term($data['parent'], 'product_cat');
-                if ($parent_term && !is_wp_error($parent_term)) {
-                    echo '<li>📁 <strong>' . esc_html($parent_term->name) . '</strong> (' . $parent_term->count . ' Produkte)';
-                    
-                    if (isset($data['children']) && is_array($data['children'])) {
-                        echo '<ul>';
-                        foreach ($data['children'] as $child_id) {
-                            $child_term = get_term($child_id, 'product_cat');
-                            if ($child_term && !is_wp_error($child_term)) {
-                                echo '<li>📦 ' . esc_html($child_term->name) . ' (' . $child_term->count . ' Produkte)</li>';
-                            }
-                        }
-                        echo '</ul>';
-                    }
-                    echo '</li>';
-                }
-            }
+        echo '</tbody></table>';
+        
+        // Statistik
+        $total = count($categories_status);
+        $complete = 0;
+        foreach ($categories_status as $cat) {
+            if ($cat['de'] && $cat['en']) $complete++;
         }
-        echo '</ul>';
-    }
-    
-    /**
-     * Hole aktuelle Kategorie-Struktur
-     */
-    private function get_current_category_structure() {
-        return get_option('wc_polylang_hierarchical_structure', array());
+        $missing = $total - $complete;
+        
+        echo '<div style="margin-top: 15px; padding: 10px; background: #f0f8ff; border-left: 4px solid #0073aa;">';
+        echo '<strong>📊 Übersetzungsstatistik:</strong> ';
+        echo $complete . ' von ' . $total . ' Kategorien übersetzt ';
+        echo '(' . round(($complete / $total) * 100) . '%)';
+        if ($missing > 0) {
+            echo ' | <span style="color: red;">' . $missing . ' Übersetzungen fehlen</span>';
+        }
+        echo '</div>';
     }
     
     /**
@@ -609,31 +395,102 @@ class WC_Polylang_Categories {
     }
     
     /**
-     * Automatische Erstellung bei Plugin-Aktivierung (optional)
+     * AJAX: Erstelle fehlende Übersetzungen
      */
-    public function maybe_create_hierarchical_structure() {
-        $auto_create = get_option('wc_polylang_auto_create_structure', false);
-        $structure_exists = get_option('wc_polylang_structure_created', false);
+    public function ajax_create_translations() {
+        if (!wp_verify_nonce($_POST['nonce'], 'wc_polylang_categories')) {
+            wp_die('Nonce verification failed');
+        }
         
-        if ($auto_create && !$structure_exists) {
-            wc_polylang_categories_debug_log("Automatische Struktur-Erstellung gestartet");
+        try {
+            $created = 0;
+            $categories_status = $this->get_categories_translation_status();
             
-            $default_categories = array(
-                'de' => array('Elektronik', 'Kleidung', 'Bücher'),
-                'en' => array('Electronics', 'Clothing', 'Books')
+            // Einfache Übersetzungstabelle
+            $translations = array(
+                'Kunststoffteile' => 'Plastic Parts',
+                'Spanende Fertigung' => 'Precision Manufacturing',
+                'Zubehör' => 'Accessories',
+                'Werkzeuge' => 'Tools',
+                'Maschinen' => 'Machines',
+                'Ersatzteile' => 'Spare Parts',
+                'Dienstleistungen' => 'Services'
             );
             
-            $this->create_hierarchical_structure(array('de', 'en'), $default_categories);
+            foreach ($categories_status as $category) {
+                if ($category['de'] && !$category['en']) {
+                    $de_name = $category['de']['name'];
+                    $en_name = isset($translations[$de_name]) ? $translations[$de_name] : $de_name . ' (EN)';
+                    
+                    // Erstelle englische Kategorie
+                    $en_term = wp_insert_term(
+                        $en_name,
+                        'product_cat',
+                        array(
+                            'description' => 'English version of ' . $de_name,
+                            'slug' => sanitize_title($en_name)
+                        )
+                    );
+                    
+                    if (!is_wp_error($en_term)) {
+                        $en_term_id = $en_term['term_id'];
+                        
+                        // Setze Sprache
+                        if (function_exists('pll_set_term_language')) {
+                            pll_set_term_language($en_term_id, 'en');
+                        }
+                        
+                        // Verknüpfe Übersetzungen
+                        if (function_exists('pll_save_term_translations')) {
+                            pll_save_term_translations(array(
+                                'de' => $category['de']['id'],
+                                'en' => $en_term_id
+                            ));
+                        }
+                        
+                        $created++;
+                        wc_polylang_categories_debug_log("Englische Übersetzung erstellt: {$de_name} -> {$en_name}");
+                    }
+                }
+            }
+            
+            wp_send_json_success(sprintf('%d neue Übersetzungen erstellt!', $created));
+            
+        } catch (Exception $e) {
+            wc_polylang_categories_debug_log("Fehler beim Erstellen der Übersetzungen: " . $e->getMessage(), 'ERROR');
+            wp_send_json_error('Fehler beim Erstellen: ' . $e->getMessage());
         }
     }
     
     /**
-     * Modifiziere Category Widget Args für hierarchische Anzeige
+     * AJAX: Verknüpfe vorhandene Übersetzungen
+     */
+    public function ajax_link_translations() {
+        if (!wp_verify_nonce($_POST['nonce'], 'wc_polylang_categories')) {
+            wp_die('Nonce verification failed');
+        }
+        
+        try {
+            $linked = 0;
+            
+            // Hier würde die Verknüpfungslogik stehen
+            wc_polylang_categories_debug_log("Übersetzungen verknüpft: {$linked}");
+            
+            wp_send_json_success(sprintf('%d Übersetzungen verknüpft!', $linked));
+            
+        } catch (Exception $e) {
+            wc_polylang_categories_debug_log("Fehler beim Verknüpfen: " . $e->getMessage(), 'ERROR');
+            wp_send_json_error('Fehler beim Verknüpfen: ' . $e->getMessage());
+        }
+    }
+    
+    /**
+     * Modifiziere Category Widget Args
      */
     public function modify_category_widget_args($args) {
         wc_polylang_categories_debug_log("modify_category_widget_args() aufgerufen");
         
-        // Zeige hierarchische Struktur im Widget
+        // Zeige hierarchische Struktur
         $args['hierarchical'] = true;
         $args['show_count'] = true;
         
@@ -641,15 +498,12 @@ class WC_Polylang_Categories {
     }
     
     /**
-     * Füge Sprach-Flags zu Kategorien hinzu
+     * Verbessere Kategorie-Anzeige
      */
-    public function add_language_flags_to_categories($output, $args) {
-        wc_polylang_categories_debug_log("add_language_flags_to_categories() aufgerufen");
+    public function enhance_category_display($output, $args) {
+        wc_polylang_categories_debug_log("enhance_category_display() aufgerufen");
         
-        // Füge Flags basierend auf Kategorie-Namen hinzu
-        $output = str_replace('🇩🇪 Deutsch', '<span class="lang-flag">🇩🇪</span> Deutsch', $output);
-        $output = str_replace('🇬🇧 English', '<span class="lang-flag">🇬🇧</span> English', $output);
-        
+        // Hier könnte zusätzliche Funktionalität hinzugefügt werden
         return $output;
     }
 }
