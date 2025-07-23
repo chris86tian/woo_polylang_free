@@ -1,39 +1,52 @@
 <?php
 /**
- * Admin functionality
+ * Admin functionality - MIT DEBUG
  */
 
 if (!defined('ABSPATH')) {
     exit;
 }
 
+// Debug-Funktion für Admin-Klasse
+function wc_polylang_admin_debug_log($message, $level = 'INFO') {
+    if (class_exists('WC_Polylang_Debug')) {
+        WC_Polylang_Debug::log("ADMIN CLASS: " . $message, $level);
+    }
+}
+
+wc_polylang_admin_debug_log("class-wc-polylang-admin.php wird geladen...");
+
 class WC_Polylang_Admin {
     
     private static $instance = null;
     
     public static function get_instance() {
+        wc_polylang_admin_debug_log("get_instance() aufgerufen");
         if (null === self::$instance) {
+            wc_polylang_admin_debug_log("Erstelle neue Admin-Instanz");
             self::$instance = new self();
         }
         return self::$instance;
     }
     
     private function __construct() {
+        wc_polylang_admin_debug_log("Admin Konstruktor gestartet");
+        
         if (!is_admin()) {
+            wc_polylang_admin_debug_log("Nicht im Admin-Bereich - beende Konstruktor");
             return;
         }
         
         try {
+            wc_polylang_admin_debug_log("Registriere Admin-Hooks...");
             add_action('admin_menu', array($this, 'add_admin_menu'));
             add_action('admin_init', array($this, 'init_settings'));
             add_action('admin_enqueue_scripts', array($this, 'enqueue_admin_scripts'));
             
-            // Initialize shop configuration
-            WC_Polylang_Shop_Config::get_instance();
-            
-            wc_polylang_debug_log('Admin class initialized');
+            wc_polylang_admin_debug_log("Admin-Hooks erfolgreich registriert");
+            wc_polylang_admin_debug_log("Admin class erfolgreich initialisiert");
         } catch (Exception $e) {
-            wc_polylang_debug_log('Error in admin constructor: ' . $e->getMessage());
+            wc_polylang_admin_debug_log("Fehler im Admin-Konstruktor: " . $e->getMessage(), 'ERROR');
         }
     }
     
@@ -41,6 +54,7 @@ class WC_Polylang_Admin {
      * Add admin menu
      */
     public function add_admin_menu() {
+        wc_polylang_admin_debug_log("add_admin_menu() aufgerufen");
         add_submenu_page(
             'woocommerce',
             __('Polylang Integration', 'wc-polylang-integration'),
@@ -55,6 +69,7 @@ class WC_Polylang_Admin {
      * Initialize settings
      */
     public function init_settings() {
+        wc_polylang_admin_debug_log("init_settings() aufgerufen");
         register_setting('wc_polylang_settings', 'wc_polylang_enable_product_translation');
         register_setting('wc_polylang_settings', 'wc_polylang_enable_category_translation');
         register_setting('wc_polylang_settings', 'wc_polylang_enable_widget_translation');
@@ -70,31 +85,23 @@ class WC_Polylang_Admin {
      * Enqueue admin scripts
      */
     public function enqueue_admin_scripts($hook) {
+        wc_polylang_admin_debug_log("enqueue_admin_scripts() aufgerufen für Hook: " . $hook);
         if (strpos($hook, 'wc-polylang-integration') === false) {
             return;
         }
         
-        wp_enqueue_style(
-            'wc-polylang-admin',
-            WC_POLYLANG_INTEGRATION_PLUGIN_URL . 'assets/css/admin.css',
-            array(),
-            WC_POLYLANG_INTEGRATION_VERSION
-        );
-        
-        wp_enqueue_script(
-            'wc-polylang-admin',
-            WC_POLYLANG_INTEGRATION_PLUGIN_URL . 'assets/js/admin.js',
-            array('jquery'),
-            WC_POLYLANG_INTEGRATION_VERSION,
-            true
-        );
+        // Simplified - no external files needed for now
+        wc_polylang_admin_debug_log("Admin-Scripts würden geladen werden (vereinfacht)");
     }
     
     /**
      * Admin page
      */
     public function admin_page() {
+        wc_polylang_admin_debug_log("admin_page() aufgerufen");
+        
         if (isset($_POST['submit'])) {
+            wc_polylang_admin_debug_log("Einstellungen werden gespeichert...");
             $this->save_settings();
         }
         
@@ -107,15 +114,6 @@ class WC_Polylang_Admin {
             
             <div class="notice notice-info">
                 <p><?php _e('Dieses Plugin integriert WooCommerce vollständig mit Polylang für eine umfassende Mehrsprachigkeit.', 'wc-polylang-integration'); ?></p>
-            </div>
-            
-            <!-- Quick Setup Card -->
-            <div class="wc-polylang-quick-setup">
-                <h2><?php _e('🚀 Schnelleinrichtung', 'wc-polylang-integration'); ?></h2>
-                <p><?php _e('Richten Sie Ihre mehrsprachigen Shop-Seiten mit einem Klick ein:', 'wc-polylang-integration'); ?></p>
-                <a href="<?php echo admin_url('admin.php?page=wc-polylang-shop-config'); ?>" class="button button-primary button-large">
-                    <?php _e('🛍️ Shop-Seiten konfigurieren', 'wc-polylang-integration'); ?>
-                </a>
             </div>
             
             <div class="wc-polylang-stats">
@@ -171,30 +169,6 @@ class WC_Polylang_Admin {
         </div>
         
         <style>
-        .wc-polylang-quick-setup {
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-            color: white;
-            padding: 30px;
-            border-radius: 8px;
-            margin: 20px 0;
-            text-align: center;
-        }
-        .wc-polylang-quick-setup h2 {
-            color: white;
-            margin-top: 0;
-        }
-        .wc-polylang-quick-setup .button {
-            background: white;
-            color: #667eea;
-            border: none;
-            font-weight: bold;
-            margin-top: 15px;
-        }
-        .wc-polylang-quick-setup .button:hover {
-            background: #f8f9fa;
-            transform: translateY(-2px);
-            box-shadow: 0 4px 12px rgba(0,0,0,0.15);
-        }
         .wc-polylang-stats {
             background: #fff;
             border: 1px solid #ccd0d4;
@@ -231,7 +205,10 @@ class WC_Polylang_Admin {
      * Save settings
      */
     private function save_settings() {
+        wc_polylang_admin_debug_log("save_settings() aufgerufen");
+        
         if (!wp_verify_nonce($_POST['wc_polylang_nonce'], 'wc_polylang_settings')) {
+            wc_polylang_admin_debug_log("Nonce-Verifikation fehlgeschlagen", 'ERROR');
             return;
         }
         
@@ -245,5 +222,8 @@ class WC_Polylang_Admin {
         wc_polylang_update_settings($settings);
         
         echo '<div class="notice notice-success"><p>' . __('Einstellungen gespeichert.', 'wc-polylang-integration') . '</p></div>';
+        wc_polylang_admin_debug_log("Einstellungen erfolgreich gespeichert");
     }
 }
+
+wc_polylang_admin_debug_log("class-wc-polylang-admin.php erfolgreich geladen");

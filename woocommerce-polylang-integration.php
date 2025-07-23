@@ -225,24 +225,50 @@ class WC_Polylang_Integration {
             }
         }
         
-        // Initialize components safely
+        WC_Polylang_Debug::log("Alle Dateien geladen - starte Komponenten-Initialisierung", 'INFO');
+        
+        // Initialize components safely - MIT DETAILLIERTEM DEBUG
         try {
-            if (is_admin() && class_exists('WC_Polylang_Admin')) {
-                WC_Polylang_Admin::get_instance();
-                WC_Polylang_Debug::log("WC_Polylang_Admin initialisiert", 'INFO');
+            WC_Polylang_Debug::log("Prüfe Admin-Bereich...", 'DEBUG');
+            if (is_admin()) {
+                WC_Polylang_Debug::log("Admin-Bereich erkannt", 'DEBUG');
+                if (class_exists('WC_Polylang_Admin')) {
+                    WC_Polylang_Debug::log("WC_Polylang_Admin Klasse gefunden - initialisiere...", 'DEBUG');
+                    WC_Polylang_Admin::get_instance();
+                    WC_Polylang_Debug::log("WC_Polylang_Admin erfolgreich initialisiert", 'SUCCESS');
+                } else {
+                    WC_Polylang_Debug::log("WC_Polylang_Admin Klasse NICHT gefunden!", 'ERROR');
+                }
+            } else {
+                WC_Polylang_Debug::log("Nicht im Admin-Bereich", 'DEBUG');
             }
             
+            WC_Polylang_Debug::log("Prüfe WC_Polylang_Products Klasse...", 'DEBUG');
             if (class_exists('WC_Polylang_Products')) {
+                WC_Polylang_Debug::log("WC_Polylang_Products Klasse gefunden - initialisiere...", 'DEBUG');
                 WC_Polylang_Products::get_instance();
-                WC_Polylang_Debug::log("WC_Polylang_Products initialisiert", 'INFO');
+                WC_Polylang_Debug::log("WC_Polylang_Products erfolgreich initialisiert", 'SUCCESS');
+            } else {
+                WC_Polylang_Debug::log("WC_Polylang_Products Klasse NICHT gefunden!", 'ERROR');
             }
             
+            WC_Polylang_Debug::log("Prüfe WC_Polylang_Elementor Klasse...", 'DEBUG');
             if (class_exists('WC_Polylang_Elementor')) {
+                WC_Polylang_Debug::log("WC_Polylang_Elementor Klasse gefunden - initialisiere...", 'DEBUG');
                 WC_Polylang_Elementor::get_instance();
-                WC_Polylang_Debug::log("WC_Polylang_Elementor initialisiert", 'INFO');
+                WC_Polylang_Debug::log("WC_Polylang_Elementor erfolgreich initialisiert", 'SUCCESS');
+            } else {
+                WC_Polylang_Debug::log("WC_Polylang_Elementor Klasse NICHT gefunden!", 'ERROR');
             }
+            
+            WC_Polylang_Debug::log("Alle Komponenten erfolgreich initialisiert!", 'SUCCESS');
+            
         } catch (Exception $e) {
-            WC_Polylang_Debug::log("Fehler beim Initialisieren der Komponenten: " . $e->getMessage(), 'ERROR');
+            WC_Polylang_Debug::log("KRITISCHER FEHLER beim Initialisieren der Komponenten: " . $e->getMessage(), 'FATAL');
+            WC_Polylang_Debug::log("Stack Trace: " . $e->getTraceAsString(), 'FATAL');
+        } catch (Error $e) {
+            WC_Polylang_Debug::log("FATAL ERROR beim Initialisieren der Komponenten: " . $e->getMessage(), 'FATAL');
+            WC_Polylang_Debug::log("Stack Trace: " . $e->getTraceAsString(), 'FATAL');
         }
     }
     
@@ -441,4 +467,6 @@ try {
     WC_Polylang_Debug::log("Plugin gestartet", 'SUCCESS');
 } catch (Exception $e) {
     WC_Polylang_Debug::log("KRITISCHER FEHLER beim Plugin-Start: " . $e->getMessage(), 'FATAL');
+} catch (Error $e) {
+    WC_Polylang_Debug::log("FATAL ERROR beim Plugin-Start: " . $e->getMessage(), 'FATAL');
 }
