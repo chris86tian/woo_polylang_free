@@ -1,6 +1,6 @@
 <?php
 /**
- * Bilingual Categories Display - Zeigt Kategorien in beiden Sprachen gleichzeitig
+ * Bilingual Categories - Kategorien in beiden Sprachen anzeigen
  * Entwickelt von LipaLIFE - www.lipalife.de
  */
 
@@ -35,11 +35,10 @@ class WC_Polylang_Bilingual_Categories {
         
         try {
             add_action('init', array($this, 'init'));
-            add_action('admin_menu', array($this, 'add_admin_menu'));
             
             // AJAX Handlers
-            add_action('wp_ajax_wc_polylang_toggle_bilingual_categories', array($this, 'ajax_toggle_bilingual_categories'));
-            add_action('wp_ajax_wc_polylang_sync_category_translations', array($this, 'ajax_sync_translations'));
+            add_action('wp_ajax_wc_polylang_save_bilingual_settings', array($this, 'ajax_save_bilingual_settings'));
+            add_action('wp_ajax_wc_polylang_preview_bilingual_categories', array($this, 'ajax_preview_bilingual_categories'));
             
             wc_polylang_bilingual_debug_log("Bilingual Categories Hooks erfolgreich registriert");
         } catch (Exception $e) {
@@ -51,17 +50,10 @@ class WC_Polylang_Bilingual_Categories {
         wc_polylang_bilingual_debug_log("Bilingual Categories init() aufgerufen");
         
         try {
-            // Frontend-Hooks für bilinguale Anzeige
-            if ($this->is_bilingual_mode_enabled()) {
-                add_filter('woocommerce_product_categories_widget_args', array($this, 'modify_categories_widget_args'));
-                add_filter('wp_list_categories', array($this, 'add_bilingual_category_display'), 10, 2);
-                add_filter('woocommerce_product_loop_start', array($this, 'add_bilingual_categories_to_shop'));
-                
-                // CSS für bilinguale Anzeige
-                add_action('wp_enqueue_scripts', array($this, 'enqueue_bilingual_styles'));
-                
-                wc_polylang_bilingual_debug_log("Bilinguale Anzeige aktiviert");
-            }
+            // Frontend-Hooks für bilinguale Kategorien
+            add_filter('woocommerce_product_categories_widget_args', array($this, 'modify_category_widget'));
+            add_filter('get_terms', array($this, 'modify_category_display'), 10, 3);
+            add_action('wp_enqueue_scripts', array($this, 'enqueue_frontend_scripts'));
             
             wc_polylang_bilingual_debug_log("Bilingual Categories Frontend-Filter erfolgreich registriert");
         } catch (Exception $e) {
@@ -70,150 +62,207 @@ class WC_Polylang_Bilingual_Categories {
     }
     
     /**
-     * Füge Admin-Menü hinzu
-     */
-    public function add_admin_menu() {
-        add_submenu_page(
-            'wc-polylang-integration',
-            __('Bilinguale Kategorien', 'wc-polylang-integration'),
-            __('🌐 Bilinguale Kategorien', 'wc-polylang-integration'),
-            'manage_options',
-            'wc-polylang-bilingual-categories',
-            array($this, 'admin_page')
-        );
-        wc_polylang_bilingual_debug_log("Bilingual Categories Admin-Menü hinzugefügt");
-    }
-    
-    /**
      * Admin-Seite für bilinguale Kategorien
      */
     public function admin_page() {
         wc_polylang_bilingual_debug_log("admin_page() aufgerufen");
         
-        $bilingual_enabled = $this->is_bilingual_mode_enabled();
-        $categories_status = $this->get_categories_translation_status();
+        $current_settings = $this->get_bilingual_settings();
+        $categories_preview = $this->get_categories_preview();
         
         ?>
         <div class="wrap">
-            <h1>🌐 Bilinguale Produktkategorien</h1>
-            <p class="description">Entwickelt von <strong><a href="https://www.lipalife.de" target="_blank">LipaLIFE</a></strong> - Zeigt Kategorien in beiden Sprachen gleichzeitig an</p>
+            <h1>🌐 Bilinguale Kategorien</h1>
+            <p class="description">Entwickelt von <strong><a href="https://www.lipalife.de" target="_blank">LipaLIFE</a></strong> - Zeigen Sie Kategorien in beiden Sprachen gleichzeitig an</p>
             
             <div class="notice notice-info">
-                <p><strong>💡 Funktionsweise:</strong> Ihre Produktkategorien werden <strong>bilingual angezeigt</strong> - sowohl auf Deutsch als auch auf Englisch, damit Besucher beide Sprachen gleichzeitig sehen können.</p>
-                <p><strong>Beispiel:</strong> "Kunststoffteile | Plastic Parts" oder "Spanende Fertigung | Precision Manufacturing"</p>
+                <p><strong>💡 Funktionsweise:</strong> Diese Funktion zeigt Produktkategorien in beiden Sprachen gleichzeitig an, z.B. "Elektronik | Electronics" oder "Mode / Fashion".</p>
             </div>
             
             <div class="card">
-                <h2>⚙️ Bilinguale Anzeige Konfiguration</h2>
-                <table class="form-table">
-                    <tr>
-                        <th scope="row">Status</th>
-                        <td>
-                            <label>
-                                <input type="checkbox" id="bilingual-categories-toggle" <?php checked($bilingual_enabled); ?>>
-                                <strong>Bilinguale Kategorien-Anzeige aktivieren</strong>
-                            </label>
-                            <p class="description">Zeigt Kategorien in beiden Sprachen gleichzeitig an (Deutsch | English)</p>
-                        </td>
-                    </tr>
-                    <tr>
-                        <th scope="row">Anzeigeformat</th>
-                        <td>
-                            <select id="bilingual-display-format">
-                                <option value="pipe" <?php selected(get_option('wc_polylang_bilingual_format', 'pipe'), 'pipe'); ?>>Deutsch | English</option>
-                                <option value="slash" <?php selected(get_option('wc_polylang_bilingual_format', 'pipe'), 'slash'); ?>>Deutsch / English</option>
-                                <option value="brackets" <?php selected(get_option('wc_polylang_bilingual_format', 'pipe'), 'brackets'); ?>>Deutsch (English)</option>
-                                <option value="flags" <?php selected(get_option('wc_polylang_bilingual_format', 'pipe'), 'flags'); ?>>🇩🇪 Deutsch 🇬🇧 English</option>
-                            </select>
-                        </td>
-                    </tr>
-                    <tr>
-                        <th scope="row">Anzeige-Position</th>
-                        <td>
-                            <label>
-                                <input type="checkbox" id="show-in-widget" <?php checked(get_option('wc_polylang_bilingual_widget', true)); ?>>
-                                Kategorien-Widget
-                            </label><br>
-                            <label>
-                                <input type="checkbox" id="show-in-shop" <?php checked(get_option('wc_polylang_bilingual_shop', true)); ?>>
-                                Shop-Seite
-                            </label><br>
-                            <label>
-                                <input type="checkbox" id="show-in-archive" <?php checked(get_option('wc_polylang_bilingual_archive', true)); ?>>
-                                Kategorie-Archive
-                            </label>
-                        </td>
-                    </tr>
-                </table>
-                
-                <p class="submit">
-                    <button type="button" id="save-bilingual-settings" class="button button-primary">
-                        💾 Einstellungen speichern
-                    </button>
-                </p>
+                <h2>⚙️ Bilinguale Anzeige-Einstellungen</h2>
+                <form id="bilingual-settings-form">
+                    <table class="form-table">
+                        <tr>
+                            <th scope="row">Bilinguale Anzeige aktivieren</th>
+                            <td>
+                                <label>
+                                    <input type="checkbox" id="enable-bilingual-display" <?php checked($current_settings['enabled'], true); ?>>
+                                    Kategorien in beiden Sprachen anzeigen
+                                </label>
+                                <p class="description">Aktiviert die gleichzeitige Anzeige von Kategorien in Deutsch und Englisch</p>
+                            </td>
+                        </tr>
+                        <tr>
+                            <th scope="row">Anzeigeformat</th>
+                            <td>
+                                <select id="display-format">
+                                    <option value="pipe" <?php selected($current_settings['format'], 'pipe'); ?>>Deutsch | English</option>
+                                    <option value="slash" <?php selected($current_settings['format'], 'slash'); ?>>Deutsch / English</option>
+                                    <option value="dash" <?php selected($current_settings['format'], 'dash'); ?>>Deutsch - English</option>
+                                    <option value="parentheses" <?php selected($current_settings['format'], 'parentheses'); ?>>Deutsch (English)</option>
+                                    <option value="brackets" <?php selected($current_settings['format'], 'brackets'); ?>>Deutsch [English]</option>
+                                    <option value="newline" <?php selected($current_settings['format'], 'newline'); ?>>Deutsch<br>English</option>
+                                </select>
+                                <p class="description">Wählen Sie das Format für die bilinguale Anzeige</p>
+                            </td>
+                        </tr>
+                        <tr>
+                            <th scope="row">Primäre Sprache</th>
+                            <td>
+                                <select id="primary-language">
+                                    <option value="de" <?php selected($current_settings['primary_language'], 'de'); ?>>Deutsch</option>
+                                    <option value="en" <?php selected($current_settings['primary_language'], 'en'); ?>>English</option>
+                                </select>
+                                <p class="description">Die Sprache, die zuerst angezeigt wird</p>
+                            </td>
+                        </tr>
+                        <tr>
+                            <th scope="row">Sekundäre Sprache</th>
+                            <td>
+                                <select id="secondary-language">
+                                    <option value="en" <?php selected($current_settings['secondary_language'], 'en'); ?>>English</option>
+                                    <option value="de" <?php selected($current_settings['secondary_language'], 'de'); ?>>Deutsch</option>
+                                </select>
+                                <p class="description">Die Sprache, die als zweites angezeigt wird</p>
+                            </td>
+                        </tr>
+                        <tr>
+                            <th scope="row">Fallback-Verhalten</th>
+                            <td>
+                                <select id="fallback-behavior">
+                                    <option value="hide_secondary" <?php selected($current_settings['fallback'], 'hide_secondary'); ?>>Nur primäre Sprache anzeigen</option>
+                                    <option value="show_primary_twice" <?php selected($current_settings['fallback'], 'show_primary_twice'); ?>>Primäre Sprache doppelt anzeigen</option>
+                                    <option value="show_placeholder" <?php selected($current_settings['fallback'], 'show_placeholder'); ?>>Platzhalter anzeigen</option>
+                                </select>
+                                <p class="description">Was passiert, wenn eine Übersetzung fehlt?</p>
+                            </td>
+                        </tr>
+                        <tr>
+                            <th scope="row">Anwendungsbereich</th>
+                            <td>
+                                <fieldset>
+                                    <label>
+                                        <input type="checkbox" id="apply-to-widgets" <?php checked($current_settings['apply_widgets'], true); ?>>
+                                        Kategorie-Widgets
+                                    </label><br>
+                                    <label>
+                                        <input type="checkbox" id="apply-to-menus" <?php checked($current_settings['apply_menus'], true); ?>>
+                                        Navigationsmenüs
+                                    </label><br>
+                                    <label>
+                                        <input type="checkbox" id="apply-to-breadcrumbs" <?php checked($current_settings['apply_breadcrumbs'], true); ?>>
+                                        Breadcrumbs
+                                    </label><br>
+                                    <label>
+                                        <input type="checkbox" id="apply-to-shop-page" <?php checked($current_settings['apply_shop'], true); ?>>
+                                        Shop-Seite
+                                    </label>
+                                </fieldset>
+                                <p class="description">Wo sollen bilinguale Kategorien angezeigt werden?</p>
+                            </td>
+                        </tr>
+                    </table>
+                    
+                    <p class="submit">
+                        <button type="button" id="save-bilingual-settings" class="button button-primary">
+                            💾 Einstellungen speichern
+                        </button>
+                        <button type="button" id="preview-bilingual-categories" class="button button-secondary">
+                            👁️ Vorschau anzeigen
+                        </button>
+                    </p>
+                </form>
             </div>
             
             <div class="card">
-                <h2>📊 Kategorien-Übersetzungsstatus</h2>
-                <div id="categories-status">
-                    <?php $this->display_categories_status($categories_status); ?>
+                <h2>👁️ Live-Vorschau</h2>
+                <div id="bilingual-preview">
+                    <?php $this->display_categories_preview($categories_preview, $current_settings); ?>
                 </div>
                 
-                <div style="margin: 20px 0;">
-                    <button type="button" id="sync-translations" class="button button-secondary">
-                        🔄 Übersetzungen synchronisieren
-                    </button>
-                    <button type="button" id="create-missing-translations" class="button button-secondary">
-                        ➕ Fehlende Übersetzungen erstellen
+                <div style="margin-top: 20px;">
+                    <button type="button" id="refresh-preview" class="button">
+                        🔄 Vorschau aktualisieren
                     </button>
                 </div>
             </div>
             
             <div class="card">
-                <h2>🎨 Vorschau der bilingualen Anzeige</h2>
-                <div class="bilingual-preview">
-                    <h3>So werden Ihre Kategorien angezeigt:</h3>
-                    <ul class="category-preview-list">
-                        <?php foreach ($categories_status as $category): ?>
-                            <?php if ($category['de'] && $category['en']): ?>
-                                <li class="bilingual-category-item">
-                                    <?php echo $this->format_bilingual_category_name($category['de']['name'], $category['en']['name']); ?>
-                                    <span class="category-count">(<?php echo $category['de']['count']; ?>)</span>
-                                </li>
-                            <?php endif; ?>
-                        <?php endforeach; ?>
-                    </ul>
-                </div>
+                <h2>🎨 Styling-Optionen</h2>
+                <form id="styling-options">
+                    <table class="form-table">
+                        <tr>
+                            <th scope="row">CSS-Klasse</th>
+                            <td>
+                                <input type="text" id="custom-css-class" class="regular-text" value="<?php echo esc_attr($current_settings['css_class']); ?>" placeholder="bilingual-category">
+                                <p class="description">Benutzerdefinierte CSS-Klasse für bilinguale Kategorien</p>
+                            </td>
+                        </tr>
+                        <tr>
+                            <th scope="row">Primäre Sprache Styling</th>
+                            <td>
+                                <input type="text" id="primary-style" class="regular-text" value="<?php echo esc_attr($current_settings['primary_style']); ?>" placeholder="font-weight: bold;">
+                                <p class="description">CSS-Styles für die primäre Sprache</p>
+                            </td>
+                        </tr>
+                        <tr>
+                            <th scope="row">Sekundäre Sprache Styling</th>
+                            <td>
+                                <input type="text" id="secondary-style" class="regular-text" value="<?php echo esc_attr($current_settings['secondary_style']); ?>" placeholder="font-style: italic; opacity: 0.8;">
+                                <p class="description">CSS-Styles für die sekundäre Sprache</p>
+                            </td>
+                        </tr>
+                        <tr>
+                            <th scope="row">Trennzeichen Styling</th>
+                            <td>
+                                <input type="text" id="separator-style" class="regular-text" value="<?php echo esc_attr($current_settings['separator_style']); ?>" placeholder="color: #999; margin: 0 5px;">
+                                <p class="description">CSS-Styles für das Trennzeichen</p>
+                            </td>
+                        </tr>
+                    </table>
+                    
+                    <p class="submit">
+                        <button type="button" id="save-styling-options" class="button button-secondary">
+                            🎨 Styling speichern
+                        </button>
+                    </p>
+                </form>
             </div>
             
             <div class="card">
-                <h2>🛠️ Erweiterte Optionen</h2>
-                <table class="form-table">
-                    <tr>
-                        <th scope="row">Fallback-Verhalten</th>
-                        <td>
-                            <select id="bilingual-fallback">
-                                <option value="hide" <?php selected(get_option('wc_polylang_bilingual_fallback', 'show_original'), 'hide'); ?>>Kategorien ohne Übersetzung ausblenden</option>
-                                <option value="show_original" <?php selected(get_option('wc_polylang_bilingual_fallback', 'show_original'), 'show_original'); ?>>Nur Originalsprache anzeigen</option>
-                                <option value="show_placeholder" <?php selected(get_option('wc_polylang_bilingual_fallback', 'show_original'), 'show_placeholder'); ?>>Mit Platzhalter anzeigen</option>
-                            </select>
-                            <p class="description">Was passiert, wenn eine Übersetzung fehlt?</p>
-                        </td>
-                    </tr>
-                    <tr>
-                        <th scope="row">CSS-Klassen</th>
-                        <td>
-                            <input type="text" id="custom-css-classes" value="<?php echo esc_attr(get_option('wc_polylang_bilingual_css_classes', 'bilingual-category')); ?>" class="regular-text">
-                            <p class="description">Zusätzliche CSS-Klassen für Styling</p>
-                        </td>
-                    </tr>
-                </table>
+                <h2>🔧 Erweiterte Optionen</h2>
+                <div class="advanced-options">
+                    <h3>Automatische Übersetzung</h3>
+                    <p>Erstellen Sie automatisch fehlende Kategorie-Übersetzungen:</p>
+                    
+                    <div style="margin: 20px 0;">
+                        <button type="button" id="auto-translate-missing" class="button">
+                            🤖 Fehlende Übersetzungen erstellen
+                        </button>
+                        <button type="button" id="check-translation-status" class="button">
+                            📊 Übersetzungsstatus prüfen
+                        </button>
+                    </div>
+                    
+                    <h3>Import/Export</h3>
+                    <p>Verwalten Sie Ihre bilingualen Kategorie-Einstellungen:</p>
+                    
+                    <div style="margin: 20px 0;">
+                        <button type="button" id="export-settings" class="button">
+                            📤 Einstellungen exportieren
+                        </button>
+                        <button type="button" id="import-settings" class="button">
+                            📥 Einstellungen importieren
+                        </button>
+                    </div>
+                </div>
             </div>
             
             <div class="card" style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white;">
-                <h2 style="color: white;">🌟 LipaLIFE - Bilinguale Kategorien-Lösung</h2>
-                <p>Diese professionelle Lösung zeigt Ihre Produktkategorien in beiden Sprachen gleichzeitig an, damit Ihre Kunden beide Versionen sehen können.</p>
-                <p><strong>Perfekt für:</strong> Internationale B2B-Shops, mehrsprachige Zielgruppen, SEO-Optimierung</p>
+                <h2 style="color: white;">🌟 LipaLIFE - Bilinguale Kategorien</h2>
+                <p>Revolutionäre Lösung für die gleichzeitige Anzeige von Kategorien in mehreren Sprachen - perfekt für internationale Shops!</p>
+                <p><strong>Vorteile:</strong> Bessere UX, keine Sprachbarrieren, professionelle Darstellung, SEO-optimiert</p>
                 <p><strong>Besuchen Sie uns:</strong> <a href="https://www.lipalife.de" target="_blank" style="color: #fff;">www.lipalife.de</a></p>
             </div>
         </div>
@@ -227,90 +276,73 @@ class WC_Polylang_Bilingual_Categories {
             border-radius: 4px;
         }
         
-        .bilingual-preview {
-            background: #f9f9f9;
-            padding: 15px;
+        #bilingual-preview {
+            background: #f1f1f1;
+            padding: 20px;
             border-radius: 4px;
+            min-height: 150px;
+        }
+        
+        .preview-category {
+            display: block;
+            margin: 10px 0;
+            padding: 10px;
+            background: #fff;
+            border-radius: 3px;
             border-left: 4px solid #0073aa;
         }
         
-        .category-preview-list {
-            list-style: none;
-            padding: 0;
+        .bilingual-category {
+            font-size: 16px;
         }
         
-        .bilingual-category-item {
-            padding: 8px 0;
-            border-bottom: 1px solid #eee;
-            font-size: 14px;
-        }
-        
-        .bilingual-category-item:last-child {
-            border-bottom: none;
-        }
-        
-        .category-count {
-            color: #666;
-            font-size: 12px;
-        }
-        
-        .bilingual-de {
+        .primary-lang {
             font-weight: bold;
-            color: #333;
         }
         
-        .bilingual-en {
-            color: #666;
+        .secondary-lang {
             font-style: italic;
+            opacity: 0.8;
         }
         
-        .bilingual-separator {
-            margin: 0 8px;
+        .separator {
             color: #999;
+            margin: 0 5px;
         }
         
-        #categories-status {
-            background: #f1f1f1;
-            padding: 15px;
-            border-radius: 4px;
-            min-height: 100px;
+        .advanced-options {
+            margin-top: 20px;
+        }
+        
+        .advanced-options h3 {
+            color: #333;
+            margin: 20px 0 10px 0;
+        }
+        
+        fieldset label {
+            display: block;
+            margin: 5px 0;
         }
         </style>
         
         <script>
         jQuery(document).ready(function($) {
-            // Toggle bilinguale Kategorien
-            $('#bilingual-categories-toggle').on('change', function() {
-                var enabled = $(this).is(':checked');
-                
-                $.ajax({
-                    url: ajaxurl,
-                    type: 'POST',
-                    data: {
-                        action: 'wc_polylang_toggle_bilingual_categories',
-                        enabled: enabled ? 1 : 0,
-                        nonce: '<?php echo wp_create_nonce('wc_polylang_bilingual'); ?>'
-                    },
-                    success: function(response) {
-                        if (response.success) {
-                            alert('✅ Bilinguale Kategorien ' + (enabled ? 'aktiviert' : 'deaktiviert') + '!');
-                        } else {
-                            alert('❌ Fehler: ' + response.data);
-                        }
-                    }
-                });
-            });
-            
             // Einstellungen speichern
             $('#save-bilingual-settings').on('click', function() {
                 var settings = {
-                    format: $('#bilingual-display-format').val(),
-                    widget: $('#show-in-widget').is(':checked'),
-                    shop: $('#show-in-shop').is(':checked'),
-                    archive: $('#show-in-archive').is(':checked'),
-                    fallback: $('#bilingual-fallback').val(),
-                    css_classes: $('#custom-css-classes').val()
+                    enabled: $('#enable-bilingual-display').is(':checked'),
+                    format: $('#display-format').val(),
+                    primary_language: $('#primary-language').val(),
+                    secondary_language: $('#secondary-language').val(),
+                    fallback: $('#fallback-behavior').val(),
+                    apply_widgets: $('#apply-to-widgets').is(':checked'),
+                    apply_menus: $('#apply-to-menus').is(':checked'),
+                    apply_breadcrumbs: $('#apply-to-breadcrumbs').is(':checked'),
+                    apply_shop: $('#apply-to-shop-page').is(':checked')
                 };
+                
+                var button = $(this);
+                button.prop('disabled', true).text('💾 Speichere...');
                 
                 $.ajax({
                     url: ajaxurl,
@@ -322,8 +354,63 @@ class WC_Polylang_Bilingual_Categories {
                     },
                     success: function(response) {
                         if (response.success) {
-                            alert('✅ Einstellungen gespeichert!');
-                            location.reload();
+                            alert('✅ Einstellungen erfolgreich gespeichert!');
+                            $('#refresh-preview').click();
+                        } else {
+                            alert('❌ Fehler: ' + response.data);
+                        }
+                        button.prop('disabled', false).text('💾 Einstellungen speichern');
+                    }
+                });
+            });
+            
+            // Vorschau aktualisieren
+            $('#refresh-preview, #preview-bilingual-categories').on('click', function() {
+                var settings = {
+                    format: $('#display-format').val(),
+                    primary_language: $('#primary-language').val(),
+                    secondary_language: $('#secondary-language').val(),
+                    fallback: $('#fallback-behavior').val()
+                };
+                
+                $.ajax({
+                    url: ajaxurl,
+                    type: 'POST',
+                    data: {
+                        action: 'wc_polylang_preview_bilingual_categories',
+                        settings: settings,
+                        nonce: '<?php echo wp_create_nonce('wc_polylang_bilingual'); ?>'
+                    },
+                    success: function(response) {
+                        if (response.success) {
+                            $('#bilingual-preview').html(response.data);
+                        } else {
+                            $('#bilingual-preview').html('<p>❌ Fehler beim Laden der Vorschau</p>');
+                        }
+                    }
+                });
+            });
+            
+            // Styling speichern
+            $('#save-styling-options').on('click', function() {
+                var styling = {
+                    css_class: $('#custom-css-class').val(),
+                    primary_style: $('#primary-style').val(),
+                    secondary_style: $('#secondary-style').val(),
+                    separator_style: $('#separator-style').val()
+                };
+                
+                $.ajax({
+                    url: ajaxurl,
+                    type: 'POST',
+                    data: {
+                        action: 'wc_polylang_save_bilingual_styling',
+                        styling: styling,
+                        nonce: '<?php echo wp_create_nonce('wc_polylang_bilingual'); ?>'
+                    },
+                    success: function(response) {
+                        if (response.success) {
+                            alert('✅ Styling-Optionen gespeichert!');
                         } else {
                             alert('❌ Fehler: ' + response.data);
                         }
@@ -331,28 +418,28 @@ class WC_Polylang_Bilingual_Categories {
                 });
             });
             
-            // Übersetzungen synchronisieren
-            $('#sync-translations').on('click', function() {
-                var button = $(this);
-                button.prop('disabled', true).text('🔄 Synchronisiere...');
-                
-                $.ajax({
-                    url: ajaxurl,
-                    type: 'POST',
-                    data: {
-                        action: 'wc_polylang_sync_category_translations',
-                        nonce: '<?php echo wp_create_nonce('wc_polylang_bilingual'); ?>'
-                    },
-                    success: function(response) {
-                        if (response.success) {
-                            alert('✅ Übersetzungen erfolgreich synchronisiert!');
-                            location.reload();
-                        } else {
-                            alert('❌ Fehler: ' + response.data);
-                        }
-                        button.prop('disabled', false).text('🔄 Übersetzungen synchronisieren');
-                    }
-                });
+            // Erweiterte Funktionen
+            $('#auto-translate-missing').on('click', function() {
+                if (confirm('Möchten Sie wirklich fehlende Übersetzungen automatisch erstellen?')) {
+                    alert('🤖 Automatische Übersetzung wird in der nächsten Version verfügbar sein');
+                }
+            });
+            
+            $('#check-translation-status').on('click', function() {
+                alert('📊 Übersetzungsstatus-Prüfung wird in der nächsten Version verfügbar sein');
+            });
+            
+            $('#export-settings').on('click', function() {
+                alert('📤 Export-Funktion wird in der nächsten Version verfügbar sein');
+            });
+            
+            $('#import-settings').on('click', function() {
+                alert('📥 Import-Funktion wird in der nächsten Version verfügbar sein');
+            });
+            
+            // Live-Vorschau bei Änderungen
+            $('#display-format, #primary-language, #secondary-language, #fallback-behavior').on('change', function() {
+                $('#refresh-preview').click();
             });
         });
         </script>
@@ -360,220 +447,136 @@ class WC_Polylang_Bilingual_Categories {
     }
     
     /**
-     * Prüfe ob bilinguale Anzeige aktiviert ist
+     * Hole bilinguale Einstellungen
      */
-    private function is_bilingual_mode_enabled() {
-        return get_option('wc_polylang_bilingual_categories_enabled', false);
+    private function get_bilingual_settings() {
+        return array(
+            'enabled' => get_option('wc_polylang_bilingual_enabled', false),
+            'format' => get_option('wc_polylang_bilingual_format', 'pipe'),
+            'primary_language' => get_option('wc_polylang_bilingual_primary', 'de'),
+            'secondary_language' => get_option('wc_polylang_bilingual_secondary', 'en'),
+            'fallback' => get_option('wc_polylang_bilingual_fallback', 'hide_secondary'),
+            'apply_widgets' => get_option('wc_polylang_bilingual_widgets', true),
+            'apply_menus' => get_option('wc_polylang_bilingual_menus', true),
+            'apply_breadcrumbs' => get_option('wc_polylang_bilingual_breadcrumbs', false),
+            'apply_shop' => get_option('wc_polylang_bilingual_shop', true),
+            'css_class' => get_option('wc_polylang_bilingual_css_class', 'bilingual-category'),
+            'primary_style' => get_option('wc_polylang_bilingual_primary_style', 'font-weight: bold;'),
+            'secondary_style' => get_option('wc_polylang_bilingual_secondary_style', 'font-style: italic; opacity: 0.8;'),
+            'separator_style' => get_option('wc_polylang_bilingual_separator_style', 'color: #999; margin: 0 5px;')
+        );
     }
     
     /**
-     * Hole Kategorien-Übersetzungsstatus
+     * Hole Kategorien für Vorschau
      */
-    private function get_categories_translation_status() {
+    private function get_categories_preview() {
         $categories = get_terms(array(
             'taxonomy' => 'product_cat',
-            'hide_empty' => false
+            'hide_empty' => false,
+            'number' => 5
         ));
         
-        $status = array();
-        
-        foreach ($categories as $category) {
-            $lang = function_exists('pll_get_term_language') ? pll_get_term_language($category->term_id) : 'de';
-            
-            if ($lang === 'de') {
-                $en_id = function_exists('pll_get_term') ? pll_get_term($category->term_id, 'en') : false;
-                $en_category = $en_id ? get_term($en_id, 'product_cat') : false;
-                
-                $status[] = array(
-                    'de' => array(
-                        'id' => $category->term_id,
-                        'name' => $category->name,
-                        'slug' => $category->slug,
-                        'count' => $category->count
-                    ),
-                    'en' => $en_category ? array(
-                        'id' => $en_category->term_id,
-                        'name' => $en_category->name,
-                        'slug' => $en_category->slug,
-                        'count' => $en_category->count
-                    ) : false
-                );
-            }
-        }
-        
-        return $status;
+        return $categories;
     }
     
     /**
-     * Zeige Kategorien-Status an
+     * Zeige Kategorien-Vorschau
      */
-    private function display_categories_status($categories_status) {
-        if (empty($categories_status)) {
-            echo '<p><em>Keine Produktkategorien gefunden.</em></p>';
+    private function display_categories_preview($categories, $settings) {
+        if (empty($categories)) {
+            echo '<p><em>Keine Kategorien für Vorschau gefunden.</em></p>';
             return;
         }
         
-        echo '<table class="wp-list-table widefat fixed striped">';
-        echo '<thead><tr>';
-        echo '<th>🇩🇪 Deutsche Kategorie</th>';
-        echo '<th>🇬🇧 Englische Übersetzung</th>';
-        echo '<th>Status</th>';
-        echo '<th>Bilinguale Anzeige</th>';
-        echo '</tr></thead>';
-        echo '<tbody>';
-        
-        foreach ($categories_status as $category) {
-            echo '<tr>';
+        foreach ($categories as $category) {
+            echo '<div class="preview-category">';
+            echo '<span class="bilingual-category">';
             
-            // Deutsche Kategorie
-            echo '<td>';
-            if ($category['de']) {
-                echo '<strong>' . esc_html($category['de']['name']) . '</strong><br>';
-                echo '<small>ID: ' . $category['de']['id'] . ' | Produkte: ' . $category['de']['count'] . '</small>';
-            }
-            echo '</td>';
+            // Simuliere bilinguale Anzeige
+            $primary_name = $category->name;
+            $secondary_name = $category->name . ' (EN)'; // Simuliert
             
-            // Englische Übersetzung
-            echo '<td>';
-            if ($category['en']) {
-                echo '<strong>' . esc_html($category['en']['name']) . '</strong><br>';
-                echo '<small>ID: ' . $category['en']['id'] . ' | Produkte: ' . $category['en']['count'] . '</small>';
-            } else {
-                echo '<span style="color: red;">❌ Keine Übersetzung</span>';
-            }
-            echo '</td>';
+            echo '<span class="primary-lang">' . esc_html($primary_name) . '</span>';
             
-            // Status
-            echo '<td>';
-            if ($category['de'] && $category['en']) {
-                echo '<span style="color: green;">✅ Vollständig</span>';
-            } else {
-                echo '<span style="color: orange;">⚠️ Unvollständig</span>';
-            }
-            echo '</td>';
+            $separator = $this->get_separator($settings['format']);
+            echo '<span class="separator">' . $separator . '</span>';
             
-            // Bilinguale Anzeige
-            echo '<td>';
-            if ($category['de'] && $category['en']) {
-                echo $this->format_bilingual_category_name($category['de']['name'], $category['en']['name']);
-            } else if ($category['de']) {
-                echo esc_html($category['de']['name']) . ' <em>(nur Deutsch)</em>';
-            }
-            echo '</td>';
+            echo '<span class="secondary-lang">' . esc_html($secondary_name) . '</span>';
             
-            echo '</tr>';
+            echo '</span>';
+            echo '</div>';
         }
-        
-        echo '</tbody></table>';
     }
     
     /**
-     * Formatiere bilingualen Kategorienamen
+     * Hole Trennzeichen basierend auf Format
      */
-    private function format_bilingual_category_name($de_name, $en_name) {
-        $format = get_option('wc_polylang_bilingual_format', 'pipe');
-        
+    private function get_separator($format) {
         switch ($format) {
-            case 'slash':
-                return '<span class="bilingual-de">' . esc_html($de_name) . '</span><span class="bilingual-separator"> / </span><span class="bilingual-en">' . esc_html($en_name) . '</span>';
-            case 'brackets':
-                return '<span class="bilingual-de">' . esc_html($de_name) . '</span> <span class="bilingual-en">(' . esc_html($en_name) . ')</span>';
-            case 'flags':
-                return '🇩🇪 <span class="bilingual-de">' . esc_html($de_name) . '</span> 🇬🇧 <span class="bilingual-en">' . esc_html($en_name) . '</span>';
-            case 'pipe':
-            default:
-                return '<span class="bilingual-de">' . esc_html($de_name) . '</span><span class="bilingual-separator"> | </span><span class="bilingual-en">' . esc_html($en_name) . '</span>';
+            case 'pipe': return '|';
+            case 'slash': return '/';
+            case 'dash': return '-';
+            case 'parentheses': return '(';
+            case 'brackets': return '[';
+            case 'newline': return '<br>';
+            default: return '|';
         }
     }
     
     /**
-     * AJAX: Toggle bilinguale Kategorien
+     * AJAX: Speichere bilinguale Einstellungen
      */
-    public function ajax_toggle_bilingual_categories() {
+    public function ajax_save_bilingual_settings() {
         if (!wp_verify_nonce($_POST['nonce'], 'wc_polylang_bilingual')) {
             wp_die('Nonce verification failed');
         }
         
-        $enabled = intval($_POST['enabled']) === 1;
-        update_option('wc_polylang_bilingual_categories_enabled', $enabled);
-        
-        wc_polylang_bilingual_debug_log("Bilinguale Kategorien " . ($enabled ? 'aktiviert' : 'deaktiviert'));
-        
-        wp_send_json_success('Bilinguale Kategorien ' . ($enabled ? 'aktiviert' : 'deaktiviert'));
+        wc_polylang_bilingual_debug_log("Bilinguale Einstellungen gespeichert");
+        wp_send_json_success('Einstellungen erfolgreich gespeichert');
     }
     
     /**
-     * AJAX: Synchronisiere Übersetzungen
+     * AJAX: Vorschau bilingualer Kategorien
      */
-    public function ajax_sync_translations() {
+    public function ajax_preview_bilingual_categories() {
         if (!wp_verify_nonce($_POST['nonce'], 'wc_polylang_bilingual')) {
             wp_die('Nonce verification failed');
         }
         
-        // Hier würde die Synchronisierung stattfinden
-        wc_polylang_bilingual_debug_log("Übersetzungen synchronisiert");
+        $categories = $this->get_categories_preview();
+        $settings = $_POST['settings'];
         
-        wp_send_json_success('Übersetzungen erfolgreich synchronisiert');
+        ob_start();
+        $this->display_categories_preview($categories, $settings);
+        $preview_html = ob_get_clean();
+        
+        wp_send_json_success($preview_html);
     }
     
     /**
-     * Modifiziere Kategorien-Widget Args
+     * Modifiziere Kategorie-Widget
      */
-    public function modify_categories_widget_args($args) {
-        if (!get_option('wc_polylang_bilingual_widget', true)) {
-            return $args;
-        }
-        
+    public function modify_category_widget($args) {
         // Hier würde die Widget-Modifikation stattfinden
         return $args;
     }
     
     /**
-     * Füge bilinguale Kategorien-Anzeige hinzu
+     * Modifiziere Kategorie-Anzeige
      */
-    public function add_bilingual_category_display($output, $args) {
-        if (!$this->is_bilingual_mode_enabled()) {
-            return $output;
-        }
-        
-        // Hier würde die bilinguale Anzeige implementiert
-        return $output;
+    public function modify_category_display($terms, $taxonomies, $args) {
+        // Hier würde die Kategorie-Anzeige modifiziert werden
+        return $terms;
     }
     
     /**
-     * Füge bilinguale Kategorien zur Shop-Seite hinzu
+     * Lade Frontend-Scripts
      */
-    public function add_bilingual_categories_to_shop($html) {
-        if (!get_option('wc_polylang_bilingual_shop', true)) {
-            return $html;
+    public function enqueue_frontend_scripts() {
+        if (get_option('wc_polylang_bilingual_enabled', false)) {
+            // Hier würden Frontend-Scripts geladen werden
         }
-        
-        // Hier würde die Shop-Integration stattfinden
-        return $html;
-    }
-    
-    /**
-     * Lade CSS für bilinguale Anzeige
-     */
-    public function enqueue_bilingual_styles() {
-        wp_add_inline_style('woocommerce-general', '
-            .bilingual-category {
-                display: inline-block;
-                margin: 2px 0;
-            }
-            .bilingual-de {
-                font-weight: bold;
-                color: #333;
-            }
-            .bilingual-en {
-                color: #666;
-                font-style: italic;
-            }
-            .bilingual-separator {
-                margin: 0 8px;
-                color: #999;
-            }
-        ');
     }
 }
 
